@@ -1,0 +1,84 @@
+/* Дополнительные стили для исправления проблемы с закрытием меню */
+
+/* Стили для сворачивания боковой панели */
+.sidebar {
+    transition: all 0.3s ease;
+    width: 250px;
+    position: fixed;
+    height: 100vh;
+    z-index: 999;
+}
+
+.sidebar.toggled {
+    width: 0 !important;
+    overflow: hidden;
+}
+
+@media (min-width: 768px) {
+    .sidebar.toggled {
+        width: 80px !important;
+        overflow: visible;
+    }
+    
+    .sidebar.toggled .nav-item .nav-link {
+        text-align: center;
+        padding: 0.75rem 1rem;
+        width: 80px;
+    }
+    
+    .sidebar.toggled .nav-item .nav-link span {
+        margin-right: 0;
+        display: none;
+    }
+    
+    .sidebar.toggled .nav-item .nav-link i {
+        margin-right: 0;
+        font-size: 1.25rem;
+    }
+    
+    .sidebar.toggled .sidebar-heading {
+        text-align: center;
+        padding: 0 1rem;
+        font-size: 0.7rem;
+    }
+}
+
+/* Стили для оверлея */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+    display: none;
+}
+
+/* Для мобильных устройств */
+@media (max-width: 767.98px) {
+    .sidebar {
+        transform: translateX(0);
+    }
+    
+    .sidebar.toggled {
+        transform: translateX(-100%);
+    }
+    
+    #content-wrapper {
+        margin-left: 0 !important;
+    }
+    
+    body:not(.sidebar-toggled) .sidebar-overlay {
+        display: block;
+    }
+}
+
+/* Анимация кнопки переключения */
+#sidebarToggle i, #sidebarToggleTop i {
+    transition: transform 0.3s;
+}
+
+.sidebar.toggled #sidebarToggle i {
+    transform: rotate(180deg);
+}

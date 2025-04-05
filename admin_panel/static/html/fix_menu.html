@@ -1,0 +1,21 @@
+<!-- Include this directly in your browser for an instant fix -->
+<link rel="stylesheet" href="/static/css/fix_menu.css">
+<script src="/static/js/fix_menu.js"></script>
+<script>
+  // Force the fixes to be applied even if there are conflicting scripts
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add these files to the document if they don't exist
+    if (!document.querySelector('link[href="/static/css/fix_menu.css"]')) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = '/static/css/fix_menu.css';
+      document.head.appendChild(link);
+    }
+    
+    if (!document.querySelector('script[src="/static/js/fix_menu.js"]')) {
+      var script = document.createElement('script');
+      script.src = '/static/js/fix_menu.js';
+      document.body.appendChild(script);
+    }
+  });
+</script>

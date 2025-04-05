@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ character.name }} - AI Simulator Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">{{ character.name }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('edit_character', character_id=character.id) }}" class="btn btn-warning">
+                <i class="bi bi-pencil"></i> Редактировать
+            </a>
+        </div>
+        <a href="{{ url_for('characters') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Назад к списку
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Основная информация</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">ID:</div>
+                    <div class="col-md-9">{{ character.id }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Имя:</div>
+                    <div class="col-md-9">{{ character.name }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Возраст:</div>
+                    <div class="col-md-9">{{ character.age or 'Не указан' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Создан:</div>
+                    <div class="col-md-9">{{ character.created_at.strftime('%Y-%m-%d %H:%M') if character.created_at else 'Н/Д' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Личность:</div>
+                    <div class="col-md-9">{{ character.personality or 'Не указана' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">История:</div>
+                    <div class="col-md-9">{{ character.background or 'Не указана' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Интересы:</div>
+                    <div class="col-md-9">
+                        {% if character.interests %}
+                            {% if character.get_interests_list and character.get_interests_list()|length > 0 %}
+                                {% for interest in character.get_interests_list() %}
+                                    <span class="badge bg-primary me-1">{{ interest }}</span>
+                                {% endfor %}
+                            {% else %}
+                                {{ character.interests }}
+                            {% endif %}
+                        {% else %}
+                            Не указаны
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Последние сообщения</h5>
+            </div>
+            <div class="card-body">
+                {% if messages %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>От</th>
+                                <th>Содержание</th>
+                                <th>Время</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for message in messages %}
+                            <tr>
+                                <td>
+                                    {% if message.sender_id == character.id %}
+                                        <span class="badge bg-success">{{ character.name }}</span>
+                                    {% else %}
+                                        <span class="badge bg-primary">Пользователь</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ message.content[:100] }}{% if message.content|length > 100 %}...{% endif %}</td>
+                                <td>{{ message.timestamp }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p>Сообщений нет.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Воспоминания</h5>
+            </div>
+            <div class="card-body">
+                {% if memories %}
+                <div class="list-group">
+                    {% for memory in memories %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">{{ memory.created_at.strftime('%Y-%m-%d') if memory.created_at else '' }}</small>
+                            <small class="text-muted">Важность: {{ memory.importance }}</small>
+                        </div>
+                        <p class="mb-1">{{ memory.content }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p>Воспоминаний нет.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

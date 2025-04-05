@@ -1,0 +1,205 @@
+/**
+ * Lighter theme for Admin Panel
+ * Overrides the dark theme and fixes menu auto-closing issues
+ */
+
+/* Light theme colors */
+:root {
+  --primary: #4e73df;
+  --primary-darker: #2e59d9;
+  --secondary: #6c757d;
+  --success: #1cc88a;
+  --info: #36b9cc;
+  --warning: #f6c23e;
+  --danger: #e74a3b;
+  --light: #f8f9fc;
+  --dark: #5a5c69;
+  --body-bg: #f8f9fc;
+  --sidebar-bg: #4e73df;
+  --sidebar-dark-bg: #3a54a7;
+  --sidebar-text: #ffffff;
+  --card-bg: #ffffff;
+  --card-border: rgba(0, 0, 0, 0.125);
+  --text-primary: #333333;
+  --text-secondary: #6c757d;
+  --text-muted: #858796;
+  --border-color: #e3e6f0;
+}
+
+/* Body background */
+body {
+  background-color: var(--body-bg);
+  color: var(--text-primary);
+  font-family: 'Roboto', 'Segoe UI', sans-serif;
+  margin: 0;
+  padding: 0;
+  transition: all 0.3s ease;
+}
+
+/* Sidebar */
+.sidebar {
+  background: linear-gradient(180deg, var(--sidebar-bg) 10%, var(--sidebar-dark-bg) 100%);
+  width: 250px !important;
+  transition: width 0.3s ease, transform 0.3s ease;
+  min-height: 100vh;
+  position: fixed;
+  z-index: 999;
+}
+
+/* Fix for menu closing automatically */
+.sidebar.toggled {
+  width: 100px !important;
+  transform: none !important;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(0);
+    width: 250px !important;
+  }
+  
+  .sidebar.toggled {
+    transform: translateX(-100%) !important;
+    width: 250px !important;
+  }
+  
+  #content-wrapper {
+    margin-left: 0 !important;
+  }
+}
+
+/* Content wrapper */
+#content-wrapper {
+  background-color: var(--body-bg);
+  margin-left: 250px;
+  transition: margin-left 0.3s ease;
+}
+
+body.sidebar-toggled #content-wrapper {
+  margin-left: 100px;
+}
+
+/* Cards */
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+  background-color: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--card-border);
+  color: var(--text-primary);
+}
+
+/* Navbar */
+.navbar {
+  background-color: var(--card-bg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.topbar {
+  background-color: var(--card-bg) !important;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Tables */
+.table {
+  color: var(--text-primary);
+}
+
+.table thead th {
+  background-color: rgba(0, 0, 0, 0.02);
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-color) !important;
+}
+
+.table td {
+  border-top: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+/* Forms */
+.form-control {
+  background-color: #ffffff;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.form-control:focus {
+  background-color: #ffffff;
+  border-color: var(--primary);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.25);
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-darker);
+  border-color: var(--primary-darker);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  color: var(--text-primary);
+}
+
+/* Sidebar text */
+.sidebar-brand, .sidebar-brand-text, .sidebar .nav-item .nav-link {
+  color: var(--sidebar-text) !important;
+}
+
+/* Fix for sidebar-brand icon */
+.sidebar-brand-icon {
+  color: var(--sidebar-text);
+}
+
+/* Improve alerts */
+.alert {
+  border-radius: 8px;
+}
+
+/* Fix nav items on sidebar */
+.sidebar .nav-item .nav-link {
+  padding: 1rem;
+}
+
+.sidebar .nav-item .nav-link i {
+  color: rgba(255, 255, 255, 0.8);
+  margin-right: 0.5rem;
+}
+
+.sidebar .nav-item .nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .nav-item .nav-link.active {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-left: 4px solid #ffffff;
+}
+
+/* Footer */
+.sticky-footer {
+  background-color: var(--card-bg);
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+/* Keep sidebar open initially */
+.sidebar.toggled {
+  display: block !important;
+  width: 250px !important;
+}
+
+@media (min-width: 768px) {
+  .sidebar {
+    overflow-y: visible;
+  }
+}

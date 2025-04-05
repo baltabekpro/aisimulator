@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-gray-800">Редактирование персонажа</h1>
+        <a href="{{ url_for('characters') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Назад к списку
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Данные персонажа</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="name">Имя</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ character.name }}" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="age">Возраст</label>
+                        <input type="number" class="form-control" id="age" name="age" value="{{ character.age }}" min="18" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="gender">Пол</label>
+                        <select class="form-control" id="gender" name="gender" required>
+                            <option value="female" {% if character.gender == 'female' %}selected{% endif %}>Женский</option>
+                            <option value="male" {% if character.gender == 'male' %}selected{% endif %}>Мужской</option>
+                            <option value="non-binary" {% if character.gender == 'non-binary' %}selected{% endif %}>Небинарный</option>
+                            <option value="other" {% if character.gender == 'other' %}selected{% endif %}>Другой</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="background">Биография</label>
+                    <textarea class="form-control" id="background" name="background" rows="5" required>{{ character.background }}</textarea>
+                    <small class="form-text text-muted">Опишите историю персонажа, его личность и предысторию.</small>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="personality_traits">Черты характера</label>
+                        <input type="text" class="form-control" id="personality_traits" name="personality_traits" 
+                               value="{{ character.personality_traits|join(', ') if character.personality_traits is iterable and character.personality_traits is not string else character.personality_traits }}">
+                        <small class="form-text text-muted">Список черт через запятую</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="interests">Интересы</label>
+                        <input type="text" class="form-control" id="interests" name="interests" 
+                               value="{{ character.interests|join(', ') if character.interests is iterable and character.interests is not string else character.interests }}">
+                        <small class="form-text text-muted">Список интересов через запятую</small>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

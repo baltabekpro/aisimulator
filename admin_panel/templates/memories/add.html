@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-gray-800">Добавить новое воспоминание</h1>
+        <a href="{{ url_for('memories') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Назад к воспоминаниям
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Данные воспоминания</h6>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('add_memory') }}">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="character_id" class="form-label">Персонаж</label>
+                        <select class="form-control" id="character_id" name="character_id" required>
+                            <option value="">Выберите персонажа</option>
+                            {% for character in characters %}
+                            <option value="{{ character.id }}">{{ character.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="user_id" class="form-label">ID Пользователя (необязательно)</label>
+                        <input type="text" class="form-control" id="user_id" name="user_id" placeholder="UUID или ID Telegram">
+                        <small class="text-muted">Оставьте пустым, чтобы воспоминание было доступно всем пользователям</small>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="memory_type" class="form-label">Тип воспоминания</label>
+                        <select class="form-control" id="memory_type" name="memory_type" required>
+                            <option value="personal_info">Личная информация</option>
+                            <option value="preference">Предпочтение</option>
+                            <option value="fact">Факт</option>
+                            <option value="date">Дата/Событие</option>
+                            <option value="relationship">Отношение</option>
+                            <option value="experience">Опыт</option>
+                            <option value="interest">Интерес</option>
+                            <option value="system">Системное</option>
+                            <option value="other">Другое</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="category" class="form-label">Категория</label>
+                        <select class="form-control" id="category" name="category" required>
+                            <option value="name">Имя</option>
+                            <option value="age">Возраст</option>
+                            <option value="job">Работа</option>
+                            <option value="hobby">Хобби</option>
+                            <option value="like">Нравится</option>
+                            <option value="dislike">Не нравится</option>
+                            <option value="family">Семья</option>
+                            <option value="hometown">Родной город</option>
+                            <option value="info">Информация</option>
+                            <option value="other">Другое</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="importance" class="form-label">Важность (1-10)</label>
+                        <input type="number" class="form-control" id="importance" name="importance" min="1" max="10" value="5" required>
+                        <small class="text-muted">10 - самое важное, 1 - наименее важное</small>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="content" class="form-label">Содержание воспоминания</label>
+                    <textarea class="form-control" id="content" name="content" rows="5" required></textarea>
+                    <small class="text-muted">Текст воспоминания, который будет использоваться ботом</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Сохранить воспоминание</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

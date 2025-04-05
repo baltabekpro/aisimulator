@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block title %}Сообщения - AI Bot Admin{% endblock %}
+
+{% block page_title %}Сообщения{% endblock %}
+
+{% block content %}
+<div class="card shadow mb-4">
+    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+        <h6 class="m-0 font-weight-bold text-primary">Последние сообщения</h6>
+    </div>
+    <div class="card-body">
+        {% if messages %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="messagesTable" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Отправитель</th>
+                        <th>Получатель</th>
+                        <th>Содержание</th>
+                        <th>Эмоция</th>
+                        <th>Время</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for message in messages %}
+                    <tr>
+                        <td>{{ message.id[:8] }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'primary' if message.sender_type == 'user' else 'success' }}">
+                                {{ message.sender_type }}
+                            </span>
+                            {{ message.sender_name }}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'primary' if message.recipient_type == 'user' else 'success' }}">
+                                {{ message.recipient_type }}
+                            </span>
+                            {{ message.recipient_name }}
+                        </td>
+                        <td>{{ message.content|truncate(50, true) }}</td>
+                        <td>
+                            {% if message.emotion %}
+                            <span class="badge bg-info">{{ message.emotion }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">нет</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ message.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info" role="alert">
+            <h4 class="alert-heading">Нет сообщений</h4>
+            <p>В системе пока нет сообщений.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTable if jQuery and DataTables are available
+    if ($.fn.DataTable) {
+        $('#messagesTable').DataTable({
+            order: [[5, 'desc']], // Sort by date
+            language: {
+                url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Russian.json"
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

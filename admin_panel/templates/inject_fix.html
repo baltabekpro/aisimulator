@@ -1,0 +1,16 @@
+<!-- This template will be injected into the rendered HTML to fix the menu issues -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-fix.css') }}">
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+<script>
+    // Add mobile class to body based on screen size
+    if (window.innerWidth < 768) {
+        document.body.classList.add('mobile-view');
+    }
+    
+    // Fix missing hasattr function in templates
+    if (typeof window.hasattr === 'undefined') {
+        window.hasattr = function(obj, prop) {
+            return obj && typeof obj === 'object' && prop in obj;
+        };
+    }
+</script>

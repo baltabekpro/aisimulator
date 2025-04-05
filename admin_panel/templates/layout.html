@@ -1,0 +1,9 @@
+<!-- In the navigation menu, find the list of links and add this: -->
+
+<!-- ... existing navigation items ... -->
+<li class="nav-item">
+    <a class="nav-link {% if request.url.path.startswith('/memories') %}active{% endif %}" href="/memories">
+        <i class="fas fa-brain"></i> Memories
+    </a>
+</li>
+<!-- ... rest of navigation ... -->

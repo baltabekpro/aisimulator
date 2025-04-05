@@ -1,0 +1,68 @@
+{% extends 'auth_base.html' %}
+
+{% block title %}Вход в AI Бот Админ Панель{% endblock %}
+
+{% block content %}
+<div class="login-page">
+    <div class="login-container">
+        <div class="login-logo">
+            <i class="fas fa-robot fa-4x text-primary"></i>
+            <h1 class="mt-2">AI Бот</h1>
+            <p class="text-muted">Панель администратора</p>
+        </div>
+        
+        <!-- Уведомления -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <form method="post" action="{{ url_for('login') }}" class="mb-4">
+            <div class="form-group">
+                <label for="username">Имя пользователя</label>
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text"><i class="fas fa-user"></i></span>
+                    </div>
+                    <input type="text" class="form-control" id="username" name="username" 
+                          placeholder="Введите имя пользователя" required>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Пароль</label>
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                    </div>
+                    <input type="password" class="form-control" id="password" name="password" 
+                           placeholder="Введите пароль" required>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input" id="remember" name="remember">
+                    <label class="custom-control-label" for="remember">Запомнить меня</label>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block btn-lg">Войти</button>
+        </form>
+        
+        <div class="text-center">
+            <p class="small text-muted">
+                © {{ current_year }} AI Бот. Все права защищены.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

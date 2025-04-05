@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - AI Simulator Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">{{ title }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('characters') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Назад к списку
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="">
+                    {{ form.csrf_token }}
+                    
+                    <div class="mb-3">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control") }}
+                        {% if form.name.errors %}
+                            <div class="text-danger">
+                                {% for error in form.name.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.age.label(class="form-label") }}
+                        {{ form.age(class="form-control") }}
+                        {% if form.age.errors %}
+                            <div class="text-danger">
+                                {% for error in form.age.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.personality.label(class="form-label") }}
+                        {{ form.personality(class="form-control", rows=4) }}
+                        <small class="form-text text-muted">Опишите черты характера персонажа.</small>
+                        {% if form.personality.errors %}
+                            <div class="text-danger">
+                                {% for error in form.personality.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.background.label(class="form-label") }}
+                        {{ form.background(class="form-control", rows=6) }}
+                        <small class="form-text text-muted">История персонажа, прошлое и другие детали.</small>
+                        {% if form.background.errors %}
+                            <div class="text-danger">
+                                {% for error in form.background.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.interests.label(class="form-label") }}
+                        {{ form.interests(class="form-control", rows=3) }}
+                        <small class="form-text text-muted">Укажите интересы персонажа через запятую.</small>
+                        {% if form.interests.errors %}
+                            <div class="text-danger">
+                                {% for error in form.interests.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Советы по созданию персонажа</h5>
+            </div>
+            <div class="card-body">
+                <ul>
+                    <li><strong>Имя</strong> - должно быть уникальным и отражать характер персонажа.</li>
+                    <li><strong>Возраст</strong> - определяет зрелость и жизненный опыт персонажа.</li>
+                    <li><strong>Черты характера</strong> - опишите ключевые особенности личности.</li>
+                    <li><strong>История</strong> - предыстория формирует мотивацию и поведение.</li>
+                    <li><strong>Интересы</strong> - определяют темы, на которые персонаж охотно говорит.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

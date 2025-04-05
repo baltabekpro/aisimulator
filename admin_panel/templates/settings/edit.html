@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block title %}Настройки системы - AI Simulator Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Настройки системы</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Общие настройки</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings') }}">
+                    {{ form.csrf_token }}
+                    
+                    <div class="mb-3">
+                        {{ form.openrouter_api_key.label(class="form-label") }}
+                        {{ form.openrouter_api_key(class="form-control") }}
+                        <small class="form-text text-muted">API ключ для доступа к OpenRouter.</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.openrouter_model.label(class="form-label") }}
+                        {{ form.openrouter_model(class="form-control") }}
+                        <small class="form-text text-muted">Модель OpenRouter для генерации ответов AI.</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.max_history_length.label(class="form-label") }}
+                        {{ form.max_history_length(class="form-control") }}
+                        <small class="form-text text-muted">Максимальное количество сообщений в истории чата.</small>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.enable_memory(class="form-check-input") }}
+                        {{ form.enable_memory.label(class="form-check-label") }}
+                        <div class="form-text text-muted">Включить систему памяти для персонажей.</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Сохранить настройки</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Тестирование API</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('test_api') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Тестовое сообщение</label>
+                        <input type="text" name="test_message" class="form-control" value="Привет, как дела?" required>
+                    </div>
+                    <button type="submit" class="btn btn-info">Проверить API соединение</button>
+                </form>
+                
+                {% if api_test_result %}
+                <div class="mt-3 p-3 {% if 'Error' in api_test_result %}bg-danger text-white{% else %}bg-success text-white{% endif %}">
+                    <h5>Результат проверки API:</h5>
+                    <p>{{ api_test_result }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Информация о системе</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        База данных
+                        <span class="badge bg-primary rounded-pill">PostgreSQL</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Версия API
+                        <span class="badge bg-info rounded-pill">1.0.0</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Режим отладки
+                        <span class="badge bg-warning rounded-pill">Включен</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Подсказки</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>OpenRouter API ключ</strong> - необходим для генерации ответов AI. <a href="https://openrouter.ai" target="_blank">Получить ключ</a></p>
+                <p><strong>Модель OpenRouter</strong> - определяет качество и стоимость ответов AI. Рекомендуется "openai/gpt-4o-2024-11-20".</p>
+                <p><strong>Длина истории</strong> - чем больше, тем лучше контекст, но выше затраты на API.</p>
+                <p><strong>Система памяти</strong> - позволяет персонажам запоминать важную информацию из разговоров.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-gray-800">Воспоминания персонажа: {{ character.name }}</h1>
+        <div>
+            <a href="{{ url_for('memories') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Назад ко всем воспоминаниям
+            </a>
+            <button type="button" class="btn btn-primary ml-2" data-toggle="modal" data-target="#addMemoryModal">
+                <i class="fas fa-plus"></i> Добавить воспоминание
+            </button>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Данные персонажа</h6>
+                    <a href="{{ url_for('edit_character', character_id=character.id) }}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-edit"></i> Редактировать персонажа
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <p><strong>Имя:</strong> {{ character.name }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <p><strong>Возраст:</strong> {{ character.age }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <p><strong>Пол:</strong> 
+                                {% if character.gender == 'female' %}Женский
+                                {% elif character.gender == 'male' %}Мужской
+                                {% elif character.gender == 'non-binary' %}Небинарный
+                                {% else %}{{ character.gender }}{% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-3">
+                            <p><strong>ID:</strong> {{ character.id }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Воспоминания ({{ memories|length }})</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Тип</th>
+                            <th>Категория</th>
+                            <th>Содержание</th>
+                            <th>Важность</th>
+                            <th>ID пользователя</th>
+                            <th>Создано</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for memory in memories %}
+                        <tr>
+                            <td>
+                                {% if memory.memory_type == 'personal_info' %}Личная информация
+                                {% elif memory.memory_type == 'preference' %}Предпочтение
+                                {% elif memory.memory_type == 'fact' %}Факт
+                                {% elif memory.memory_type == 'date' %}Дата/событие
+                                {% elif memory.memory_type == 'relationship' %}Отношение
+                                {% else %}{{ memory.memory_type }}{% endif %}
+                            </td>
+                            <td>
+                                {% if memory.category == 'job' %}Работа
+                                {% elif memory.category == 'hobby' %}Хобби
+                                {% elif memory.category == 'family' %}Семья
+                                {% elif memory.category == 'name' %}Имя
+                                {% elif memory.category == 'like' %}Нравится
+                                {% elif memory.category == 'dislike' %}Не нравится
+                                {% else %}{{ memory.category }}{% endif %}
+                            </td>
+                            <td>{{ memory.content }}</td>
+                            <td>{{ memory.importance }}</td>
+                            <td>{{ memory.user_id }}</td>
+                            <td>{{ memory.created_at.strftime('%Y-%m-%d %H:%M') if memory.created_at else 'Н/Д' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('delete_memory', memory_id=memory.id) }}" onsubmit="return confirm('Вы уверены, что хотите удалить это воспоминание?');" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center">Воспоминания не найдены для этого персонажа</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Memory Modal -->
+<div class="modal fade" id="addMemoryModal" tabindex="-1" role="dialog" aria-labelledby="addMemoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addMemoryModalLabel">Добавить воспоминание для {{ character.name }}</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form action="{{ url_for('add_memory') }}" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="character_id" value="{{ character.id }}">
+                    
+                    <div class="form-group">
+                        <label for="memory_type">Тип воспоминания</label>
+                        <select class="form-control" id="memory_type" name="memory_type" required>
+                            <option value="personal_info">Личная информация</option>
+                            <option value="preference">Предпочтение</option>
+                            <option value="fact">Факт</option>
+                            <option value="date">Дата/Событие</option>
+                            <option value="relationship">Отношение</option>
+                            <option value="experience">Опыт</option>
+                            <option value="interest">Интерес</option>
+                            <option value="other">Другое</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="category">Категория</label>
+                        <select class="form-control" id="category" name="category" required>
+                            <option value="name">Имя</option>
+                            <option value="age">Возраст</option>
+                            <option value="job">Работа</option>
+                            <option value="hobby">Хобби</option>
+                            <option value="like">Нравится</option>
+                            <option value="dislike">Не нравится</option>
+                            <option value="family">Семья</option>
+                            <option value="hometown">Родной город</option>
+                            <option value="other">Другое</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="content">Содержание</label>
+                        <textarea class="form-control" id="content" name="content" rows="3" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="importance">Важность (1-10)</label>
+                        <input type="number" class="form-control" id="importance" name="importance" min="1" max="10" value="5">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="user_id">ID пользователя (необязательно)</label>
+                        <input type="text" class="form-control" id="user_id" name="user_id" placeholder="UUID или ID Telegram">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить воспоминание</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

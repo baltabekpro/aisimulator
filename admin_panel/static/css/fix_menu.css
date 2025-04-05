@@ -1,0 +1,99 @@
+/* Simple fix for menu auto-closing problems */
+
+/* Keep sidebar fixed on the page */
+.sidebar {
+  position: fixed;
+  min-height: 100vh;
+  z-index: 999;
+  transition: all 0.3s ease;
+  width: 250px !important;
+  overflow-y: auto;
+}
+
+/* Make sidebar toggled behavior consistent */
+.sidebar.toggled {
+  width: 100px !important;
+  overflow: visible;
+}
+
+/* Keep content area properly positioned */
+#content-wrapper {
+  margin-left: 250px;
+  transition: margin 0.3s ease;
+}
+
+body.sidebar-toggled #content-wrapper {
+  margin-left: 100px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 767.98px) {
+  .sidebar {
+    transform: translateX(0);
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+  }
+  
+  .sidebar.toggled {
+    transform: translateX(-100%);
+    width: 0 !important;
+  }
+  
+  #content-wrapper {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  
+  body.sidebar-toggled #content-wrapper {
+    margin-left: 0 !important;
+  }
+}
+
+/* Force sidebar to stay visible on larger screens */
+@media (min-width: 768px) {
+  .sidebar {
+    display: block !important;
+    visibility: visible !important;
+  }
+}
+
+/* Make sidebar more visible with lighter background */
+.sidebar {
+  background: linear-gradient(180deg, #4e73df 10%, #224abe 100%);
+}
+
+/* More legible sidebar text */
+.sidebar .nav-item .nav-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500;
+}
+
+/* Lighten page background */
+body {
+  background-color: #f8f9fc;
+  color: #333;
+}
+
+/* Visually indicate active sidebar item */
+.sidebar .nav-item .nav-link.active {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-left: 4px solid white;
+}
+
+/* More visible sidebar items on hover */
+.sidebar .nav-item .nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Improve card appearance */
+.card {
+  background-color: #fff;
+  border: 1px solid #e3e6f0;
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+}
+
+/* Improve card header appearance */
+.card-header {
+  background-color: #f8f9fc;
+  border-bottom: 1px solid #e3e6f0;
+  color: #444;
+}

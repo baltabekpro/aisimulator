@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ user.username }} - AI Simulator Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">{{ user.username }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-warning">
+                <i class="bi bi-pencil"></i> Редактировать
+            </a>
+        </div>
+        <a href="{{ url_for('users') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Назад к списку
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Информация о пользователе</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4 fw-bold">ID:</div>
+                    <div class="col-md-8">{{ user.id }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4 fw-bold">Имя пользователя:</div>
+                    <div class="col-md-8">{{ user.username }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4 fw-bold">Email:</div>
+                    <div class="col-md-8">{{ user.email }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4 fw-bold">Имя:</div>
+                    <div class="col-md-8">{{ user.name or 'Не указано' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4 fw-bold">Статус:</div>
+                    <div class="col-md-8">
+                        {% if user.is_active %}
+                        <span class="badge bg-success">Активен</span>
+                        {% else %}
+                        <span class="badge bg-danger">Неактивен</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4 fw-bold">Дата регистрации:</div>
+                    <div class="col-md-8">{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else 'Н/Д' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4 fw-bold">Последнее обновление:</div>
+                    <div class="col-md-8">{{ user.updated_at.strftime('%Y-%m-%d %H:%M') if user.updated_at else 'Н/Д' }}</div>
+                </div>
+                {% if user.external_id %}
+                <div class="row mb-3">
+                    <div class="col-md-4 fw-bold">Внешний ID:</div>
+                    <div class="col-md-8">{{ user.external_id }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Персонажи пользователя</h5>
+            </div>
+            <div class="card-body">
+                {% if user_characters %}
+                <div class="list-group">
+                    {% for character in user_characters %}
+                    <a href="{{ url_for('view_character', character_id=character.id) }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ character.name }}</h5>
+                        </div>
+                        <p class="mb-1">{{ character.background[:100] }}{% if character.background and character.background|length > 100 %}...{% endif %}</p>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p>У пользователя нет персонажей.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>Статистика активности</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6 fw-bold">Всего сообщений:</div>
+                    <div class="col-md-6">{{ user_stats.message_count if user_stats else 0 }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6 fw-bold">Последняя активность:</div>
+                    <div class="col-md-6">{{ user_stats.last_active.strftime('%Y-%m-%d %H:%M') if user_stats and user_stats.last_active else 'Нет данных' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

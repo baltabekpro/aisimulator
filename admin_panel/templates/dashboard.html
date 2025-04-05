@@ -1,0 +1,307 @@
+{% extends 'base.html' %}
+
+{% block title %}Панель управления | AI Бот{% endblock %}
+{% block page_title %}Панель управления{% endblock %}
+
+{% block content %}
+<!-- Карточки статистики -->
+<div class="row">
+    <!-- Пользователи -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Пользователи</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ stats.users if stats else 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Персонажи -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Персонажи</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ stats.characters if stats else 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-user-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Сообщения -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            Сообщения</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ stats.messages if stats else 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-comments fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Воспоминания -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Воспоминания</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ stats.memories if stats else 0 }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-brain fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Графики и диаграммы -->
+<div class="row">
+    <!-- График активности -->
+    <div class="col-xl-8 col-lg-7">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Активность пользователей</h6>
+                <div class="dropdown no-arrow">
+                    <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"
+                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                        aria-labelledby="dropdownMenuLink">
+                        <div class="dropdown-header">Период:</div>
+                        <a class="dropdown-item" href="#">За неделю</a>
+                        <a class="dropdown-item" href="#">За месяц</a>
+                        <a class="dropdown-item" href="#">За год</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="#">Экспорт данных</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-area">
+                    <canvas id="myAreaChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Диаграмма персонажей -->
+    <div class="col-xl-4 col-lg-5">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Популярность персонажей</h6>
+                <div class="dropdown no-arrow">
+                    <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"
+                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                        aria-labelledby="dropdownMenuLink">
+                        <div class="dropdown-header">Показать:</div>
+                        <a class="dropdown-item" href="#">Топ-5</a>
+                        <a class="dropdown-item" href="#">Топ-10</a>
+                        <a class="dropdown-item" href="#">Все</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-pie pt-4 pb-2">
+                    <canvas id="myPieChart"></canvas>
+                </div>
+                <div class="mt-4 text-center small">
+                    <span class="mr-2">
+                        <i class="fas fa-circle text-primary"></i> <span class="character-name">Персонаж 1</span>
+                    </span>
+                    <span class="mr-2">
+                        <i class="fas fa-circle text-success"></i> <span class="character-name">Персонаж 2</span>
+                    </span>
+                    <span class="mr-2">
+                        <i class="fas fa-circle text-info"></i> <span class="character-name">Другие</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Последние сообщения и события -->
+<div class="row">
+    <!-- Последние сообщения -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Последние сообщения</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Отправитель</th>
+                                <th>Получатель</th>
+                                <th>Текст</th>
+                                <th>Дата</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if latest_messages %}
+                                {% for message in latest_messages %}
+                                <tr>
+                                    <td>{{ message.sender_id }}</td>
+                                    <td>{{ message.recipient_id }}</td>
+                                    <td>{{ message.content|truncate(30) }}</td>
+                                    <td>{{ message.created_at }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">Нет сообщений</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+                <a href="{{ url_for('messages') }}" class="btn btn-primary btn-sm mt-2">
+                    Все сообщения <i class="fas fa-arrow-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Последние события -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Последние события</h6>
+            </div>
+            <div class="card-body">
+                {% if recent_events %}
+                <div class="list-group">
+                    {% for event in recent_events %}
+                    <a href="#" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ event.title }}</h6>
+                            <small>{{ event.time_ago }}</small>
+                        </div>
+                        <p class="mb-1">{{ event.description }}</p>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-center">Нет недавних событий для отображения</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Настройка графика активности
+var ctx = document.getElementById("myAreaChart").getContext("2d");
+var myLineChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+        datasets: [{
+            label: "Сообщения",
+            lineTension: 0.3,
+            backgroundColor: "rgba(126, 87, 194, 0.05)",
+            borderColor: "rgba(126, 87, 194, 1)",
+            pointRadius: 3,
+            pointBackgroundColor: "rgba(126, 87, 194, 1)",
+            pointBorderColor: "rgba(126, 87, 194, 1)",
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: "rgba(126, 87, 194, 1)",
+            pointHoverBorderColor: "rgba(126, 87, 194, 1)",
+            pointHitRadius: 10,
+            pointBorderWidth: 2,
+            data: [120, 150, 130, 180, 200, 170, 190],
+        }],
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                labels: {
+                    color: '#b0bec5'
+                }
+            }
+        },
+        scales: {
+            x: {
+                grid: {
+                    color: '#333333'
+                },
+                ticks: {
+                    color: '#b0bec5'
+                }
+            },
+            y: {
+                grid: {
+                    color: '#333333'
+                },
+                ticks: {
+                    color: '#b0bec5'
+                }
+            }
+        }
+    }
+});
+
+// Настройка диаграммы персонажей
+var ctx2 = document.getElementById("myPieChart").getContext("2d");
+var myPieChart = new Chart(ctx2, {
+    type: 'doughnut',
+    data: {
+        labels: ["Персонаж 1", "Персонаж 2", "Другие"],
+        datasets: [{
+            data: [0, 0, 0], // Пустые данные по умолчанию
+            backgroundColor: ['#7e57c2', '#4caf50', '#03a9f4'],
+            hoverBackgroundColor: ['#5e35b1', '#388e3c', '#0288d1'],
+            hoverBorderColor: "#1e1e1e",
+        }],
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        cutout: '70%'
+    }
+});
+</script>
+{% endblock %}

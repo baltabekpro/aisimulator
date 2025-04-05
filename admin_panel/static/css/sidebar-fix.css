@@ -1,0 +1,112 @@
+/* 
+ * Sidebar Fix CSS
+ * Corrects issues with the sidebar menu in the admin panel
+ */
+.sidebar {
+    transition: all 0.3s ease;
+    width: 250px;
+    z-index: 999;
+}
+
+/* Sidebar toggled state */
+.sidebar.toggled {
+    overflow: visible;
+}
+
+/* Desktop styles */
+@media (min-width: 768px) {
+    .sidebar {
+        position: fixed;
+        height: 100vh;
+    }
+    
+    .sidebar.toggled {
+        width: 100px !important;
+    }
+    
+    .sidebar.toggled .nav-item .nav-link {
+        text-align: center;
+        padding: 1rem;
+    }
+    
+    .sidebar.toggled .nav-item .nav-link span {
+        display: none;
+    }
+    
+    .sidebar.toggled .nav-item .nav-link i {
+        margin-right: 0;
+        font-size: 1.2rem;
+    }
+    
+    #content-wrapper {
+        margin-left: 250px;
+        transition: margin-left 0.3s ease;
+    }
+    
+    body.sidebar-toggled #content-wrapper {
+        margin-left: 100px;
+    }
+}
+
+/* Mobile styles */
+@media (max-width: 767.98px) {
+    .sidebar {
+        position: fixed;
+        height: 100vh;
+        width: 250px !important;
+        transform: translateX(0);
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar.toggled {
+        transform: translateX(-100%);
+    }
+    
+    #content-wrapper {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    
+    /* Force close menu on small screens initially */
+    body.mobile-view .sidebar {
+        transform: translateX(-100%);
+    }
+}
+
+/* Sidebar overlay */
+#sidebar-overlay {
+    display: none;
+    z-index: 998;
+}
+
+/* Improved sidebar nav items */
+.sidebar .nav-item {
+    position: relative;
+}
+
+.sidebar .nav-item .nav-link {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    width: 100%;
+}
+
+.sidebar .nav-item .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-left: 4px solid #4e73df;
+}
+
+/* Toggle button improvements */
+#sidebarToggle, #sidebarToggleTop {
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+#sidebarToggle:hover, #sidebarToggleTop:hover {
+    opacity: 0.8;
+}
+
+#sidebarToggle:focus, #sidebarToggleTop:focus {
+    outline: none;
+}

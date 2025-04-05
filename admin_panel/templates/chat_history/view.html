@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}Просмотр чата - AI Simulator Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Просмотр сообщения чата</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('chat_history') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Назад к списку
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Информация о сообщении</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">ID:</div>
+                    <div class="col-md-9">{{ chat.id }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Роль:</div>
+                    <div class="col-md-9">
+                        <span class="badge {% if chat.role == 'user' %}bg-primary{% elif chat.role == 'assistant' %}bg-success{% else %}bg-secondary{% endif %}">{{ chat.role }}</span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Персонаж:</div>
+                    <div class="col-md-9">{{ character.name if character else chat.character_id }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Пользователь:</div>
+                    <div class="col-md-9">{{ user.username if user else chat.user_id }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Создано:</div>
+                    <div class="col-md-9">{{ chat.created_at.strftime('%Y-%m-%d %H:%M:%S') if chat.created_at else 'Н/Д' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Позиция:</div>
+                    <div class="col-md-9">{{ chat.position }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Активно:</div>
+                    <div class="col-md-9">
+                        {% if chat.is_active %}
+                        <span class="badge bg-success">Да</span>
+                        {% else %}
+                        <span class="badge bg-danger">Нет</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Сжато:</div>
+                    <div class="col-md-9">
+                        {% if chat.compressed %}
+                        <span class="badge bg-warning">Да</span>
+                        {% else %}
+                        <span class="badge bg-info">Нет</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Содержание сообщения</h5>
+            </div>
+            <div class="card-body">
+                <pre class="p-3 bg-light">{{ chat.content }}</pre>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Метаданные сообщения</h5>
+            </div>
+            <div class="card-body">
+                {% if metadata %}
+                <div class="mb-3">
+                    <h6>Эмоция:</h6>
+                    {% if metadata.emotion %}
+                    <span class="badge bg-primary">{{ metadata.emotion }}</span>
+                    {% else %}
+                    <span class="text-muted">Не указана</span>
+                    {% endif %}
+                </div>
+                
+                {% if metadata.gift_event %}
+                <div class="mb-3">
+                    <h6>Информация о подарке:</h6>
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            ID подарка
+                            <span class="badge bg-primary rounded-pill">{{ metadata.gift_event.gift_id }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Название
+                            <span>{{ metadata.gift_event.gift_name }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Эффект
+                            <span class="badge bg-info rounded-pill">{{ metadata.gift_event.gift_effect }}</span>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
+                
+                <hr>
+                <h6>Все метаданные:</h6>
+                <pre class="p-2 bg-light">{{ metadata|tojson(indent=2) }}</pre>
+                {% else %}
+                <p class="text-muted">Нет метаданных</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

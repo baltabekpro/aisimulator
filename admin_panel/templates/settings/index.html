@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+
+{% block title %}Настройки - AI Bot Admin{% endblock %}
+
+{% block page_title %}Настройки системы{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Настройки API</h6>
+            </div>
+            <div class="card-body">
+                <form>
+                    <div class="mb-3">
+                        <label for="openrouterApiKey" class="form-label">OpenRouter API Key</label>
+                        <input type="password" class="form-control" id="openrouterApiKey" 
+                            value="{{ openrouter_api_key|default('') }}" placeholder="sk-or-v1-...">
+                        <div class="form-text">API ключ для доступа к OpenRouter. 
+                            <a href="https://openrouter.ai/keys" target="_blank">Получить ключ</a>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="openrouterModel" class="form-label">Модель AI</label>
+                        <select class="form-control" id="openrouterModel">
+                            <option value="openai/gpt-4o-2024-11-20" selected>GPT-4o</option>
+                            <option value="openai/gpt-4-turbo">GPT-4 Turbo</option>
+                            <option value="anthropic/claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                            <option value="mistralai/mistral-large">Mistral Large</option>
+                        </select>
+                        <div class="form-text">Модель для генерации ответов AI</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i> Сохранить настройки API
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Общие настройки</h6>
+            </div>
+            <div class="card-body">
+                <form>
+                    <div class="mb-3">
+                        <label for="debugMode" class="form-label">Режим отладки</label>
+                        <select class="form-control" id="debugMode">
+                            <option value="1" selected>Включен</option>
+                            <option value="0">Выключен</option>
+                        </select>
+                        <div class="form-text">В режиме отладки в консоль выводится подробная информация</div>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="autoActivateUsers" checked>
+                        <label class="form-check-label" for="autoActivateUsers">Автоматическая активация пользователей</label>
+                        <div class="form-text">Новые пользователи будут автоматически активированы при регистрации</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i> Сохранить общие настройки
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-danger">Опасные действия</h6>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">Будьте осторожны с этими действиями. Они могут привести к потере данных.</p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#confirmClearCache">
+                        <i class="fas fa-broom me-1"></i> Очистить кэш
+                    </button>
+                    <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#confirmReset">
+                        <i class="fas fa-exclamation-triangle me-1"></i> Сбросить настройки
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal for Cache Clear -->
+<div class="modal fade" id="confirmClearCache" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение очистки кэша</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите очистить кэш? Это может временно замедлить работу системы.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-warning">Очистить кэш</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal for Settings Reset -->
+<div class="modal fade" id="confirmReset" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Подтверждение сброса настроек</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите сбросить все настройки к значениям по умолчанию? Это действие нельзя отменить.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger">Сбросить настройки</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

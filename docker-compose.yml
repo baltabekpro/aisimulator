@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # База данных PostgreSQL
+  postgres:
+    image: postgres:13
+    container_name: aibot-postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=aibot
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=aibot
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aibot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API сервер (FastAPI + Uvicorn)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: aibot-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
+    ports:
+      - "8000:8000"  # Публичный порт API
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+
+  # Admin панель (Flask + Gunicorn)
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    container_name: aibot-admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
+      - API_BASE_URL=http://api:8000/api/v1
+    ports:
+      - "5000:5000"  # Публичный порт админ-панели
+    command: gunicorn -w 2 -b 0.0.0.0:5000 "admin_panel.app:app"
+    restart: unless-stopped
+
+  # Telegram бот
+  telegram:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    container_name: aibot-telegram
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
+      - API_BASE_URL=http://api:8000/api/v1
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

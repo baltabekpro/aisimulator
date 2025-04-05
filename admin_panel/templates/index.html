@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}AI Bot Admin - Главная{% endblock %}
+
+{% block page_title %}Главная панель{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card info-card primary h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="card-title">Пользователи</div>
+                        <div class="card-value">{{ stats.users|default(0) }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card info-card success h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="card-title">Персонажи</div>
+                        <div class="card-value">{{ stats.characters|default(0) }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-user-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card info-card info h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="card-title">Сообщения</div>
+                        <div class="card-value">{{ stats.messages|default(0) }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-comment fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card info-card warning h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="card-title">Воспоминания</div>
+                        <div class="card-value">{{ stats.memory_entries|default(0) }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-brain fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-chart-area me-1"></i>
+                Активность пользователей
+            </div>
+            <div class="card-body">
+                <p class="mb-0">Для более подробной статистики посетите <a href="/dashboard">страницу статистики</a>.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-bell me-1"></i>
+                Системные уведомления
+            </div>
+            <div class="card-body">
+                {% if system_notifications %}
+                    {% for notification in system_notifications %}
+                        <p class="{{ notification.class }} mb-0">
+                            <i class="{{ notification.icon }} me-1"></i>
+                            {{ notification.message }}
+                        </p>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-success mb-0">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Система работает нормально.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

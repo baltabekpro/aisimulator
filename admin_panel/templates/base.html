@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AI Бот Админ Панель{% endblock %}</title>
+    
+    <!-- Шрифты -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body id="page-top">
+    <!-- Page Wrapper -->
+    <div id="wrapper">
+        <!-- Оверлей для мобильного меню -->
+        <div class="sidebar-overlay"></div>
+        
+        <!-- Боковая панель -->
+        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+            <!-- Логотип -->
+            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{{ url_for('index') }}">
+                <div class="sidebar-brand-icon rotate-n-15">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="sidebar-brand-text mx-3">AI Бот Админ</div>
+            </a>
+
+            <!-- Разделитель -->
+            <hr class="sidebar-divider my-0">
+
+            <!-- Пункт меню - Панель управления -->
+            <li class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+                <a class="nav-link" href="{{ url_for('index') }}">
+                    <i class="fas fa-fw fa-tachometer-alt"></i>
+                    <span>Главная</span>
+                </a>
+            </li>
+
+            <!-- Разделитель -->
+            <hr class="sidebar-divider">
+
+            <!-- Заголовок -->
+            <div class="sidebar-heading">
+                Управление
+            </div>
+
+            <!-- Статистика -->
+            <li class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                <a class="nav-link" href="{{ url_for('dashboard') }}">
+                    <i class="fas fa-fw fa-chart-area"></i>
+                    <span>Статистика</span>
+                </a>
+            </li>
+
+            <!-- Пользователи -->
+            <li class="nav-item {% if request.endpoint and request.endpoint.startswith('users') %}active{% endif %}">
+                <a class="nav-link" href="{{ url_for('users') }}">
+                    <i class="fas fa-fw fa-users"></i>
+                    <span>Пользователи</span>
+                </a>
+            </li>
+
+            <!-- Персонажи -->
+            <li class="nav-item {% if request.endpoint and request.endpoint.startswith('characters') %}active{% endif %}">
+                <a class="nav-link" href="{{ url_for('characters') }}">
+                    <i class="fas fa-fw fa-user-circle"></i>
+                    <span>Персонажи</span>
+                </a>
+            </li>
+
+            <!-- Сообщения -->
+            <li class="nav-item {% if request.endpoint and request.endpoint.startswith('messages') %}active{% endif %}">
+                <a class="nav-link" href="{{ url_for('messages') }}">
+                    <i class="fas fa-fw fa-comment"></i>
+                    <span>Сообщения</span>
+                </a>
+            </li>
+            
+            <!-- Настройки -->
+            <li class="nav-item {% if request.endpoint and request.endpoint.startswith('settings') %}active{% endif %}">
+                <a class="nav-link" href="{{ url_for('settings') }}">
+                    <i class="fas fa-fw fa-cog"></i>
+                    <span>Настройки</span>
+                </a>
+            </li>
+
+            <!-- Память -->
+            <li class="nav-item {% if request.endpoint and request.endpoint.startswith('memories') %}active{% endif %}">
+                <a class="nav-link" href="{{ url_for('memories') }}">
+                    <i class="fas fa-fw fa-brain"></i>
+                    <span>Воспоминания</span>
+                </a>
+            </li>
+
+            <!-- Разделитель -->
+            <hr class="sidebar-divider d-none d-md-block">
+
+            <!-- Кнопка сворачивания -->
+            <div class="text-center d-none d-md-inline">
+                <button class="rounded-circle border-0" id="sidebarToggle">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+        </ul>
+        <!-- Конец боковой панели -->
+
+        <!-- Основной контент -->
+        <div id="content-wrapper" class="d-flex flex-column">
+            <div id="content">
+                <!-- Верхняя панель -->
+                <nav class="navbar navbar-expand navbar-dark bg-dark-light topbar mb-4 static-top shadow">
+                    <!-- Кнопка сворачивания для мобильных -->
+                    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
+                        <i class="fa fa-bars"></i>
+                    </button>
+
+                    <!-- Заголовок страницы -->
+                    <h1 class="h3 mb-0 text-light">{% block page_title %}AI Бот Админ Панель{% endblock %}</h1>
+
+                    <!-- Верхняя панель - правая часть -->
+                    <ul class="navbar-nav ml-auto">
+                        <div class="topbar-divider d-none d-sm-block"></div>
+
+                        <!-- Информация о пользователе -->
+                        <li class="nav-item dropdown no-arrow">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">
+                                    {% if current_user and current_user.is_authenticated %}
+                                        {% if current_user.username %}
+                                            {{ current_user.username }}
+                                        {% else %}
+                                            Администратор
+                                        {% endif %}
+                                    {% else %}
+                                        Администратор
+                                    {% endif %}
+                                </span>
+                                <img class="img-profile rounded-circle" src="{{ url_for('static', filename='img/avatar.png') }}">
+                            </a>
+                            <!-- Выпадающее меню пользователя -->
+                            <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in"
+                                aria-labelledby="userDropdown">
+                                <a class="dropdown-item" href="#">
+                                    <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
+                                    Профиль
+                                </a>
+                                <a class="dropdown-item" href="#">
+                                    <i class="fas fa-cogs fa-sm fa-fw mr-2 text-gray-400"></i>
+                                    Настройки
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="#" data-toggle="modal" data-target="#logoutModal">
+                                    <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                                    Выход
+                                </a>
+                            </div>
+                        </li>
+                    </ul>
+                </nav>
+                <!-- Конец верхней панели -->
+
+                <!-- Контент страницы -->
+                <div class="container-fluid">
+                    <!-- Уведомления -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show">
+                                    {{ message }}
+                                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                        <span aria-hidden="true">&times;</span>
+                                    </button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <!-- Содержимое страницы -->
+                    {% block content %}{% endblock %}
+                </div>
+                <!-- Конец контент страницы -->
+            </div>
+
+            <!-- Футер -->
+            <footer class="sticky-footer bg-dark-light">
+                <div class="container my-auto">
+                    <div class="copyright text-center my-auto">
+                        <span>Copyright &copy; AI Бот {{ current_year }}</span>
+                        {% if debug_mode %}
+                        <span class="text-muted ml-2">Версия: {{ app_version }} (Режим отладки)</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </footer>
+            <!-- Конец футера -->
+        </div>
+        <!-- Конец контент-враппера -->
+    </div>
+    <!-- Конец обертки страницы -->
+
+    <!-- Кнопка прокрутки вверх -->
+    <a class="scroll-to-top rounded" href="#page-top">
+        <i class="fas fa-angle-up"></i>
+    </a>
+
+    <!-- Модальное окно выхода -->
+    <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exampleModalLabel">Вы уверены, что хотите выйти?</h5>
+                    <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">×</span>
+                    </button>
+                </div>
+                <div class="modal-body">Нажмите "Выход" ниже, если вы готовы завершить текущую сессию.</div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" type="button" data-dismiss="modal">Отмена</button>
+                    <a class="btn btn-primary" href="{{ url_for('logout') }}">Выход</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Скрипт, который предотвращает автозакрытие меню (ВАЖНО!) -->
+    <script src="{{ url_for('static', filename='js/no_auto_close.js') }}"></script>
+
+    <!-- Дополнительный скрипт для устранения проблем с меню -->
+    <script>
+    // Этот код выполняется при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("Отключаем автозакрытие меню");
+        
+        // Отключаем все обработчики событий для кнопок меню
+        var toggleBtns = document.querySelectorAll('#sidebarToggle, #sidebarToggleTop');
+        toggleBtns.forEach(function(btn) {
+            var newBtn = btn.cloneNode(true);
+            if (btn.parentNode) {
+                btn.parentNode.replaceChild(newBtn, btn);
+            }
+        });
+        
+        // Добавляем новые обработчики
+        var newToggleBtns = document.querySelectorAll('#sidebarToggle, #sidebarToggleTop');
+        newToggleBtns.forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Переключаем состояние меню
+                document.body.classList.toggle('sidebar-toggled');
+                document.querySelector('.sidebar').classList.toggle('toggled');
+                
+                // Останавливаем дальнейшее распространение события
+                return false;
+            });
+        });
+        
+        // Отключаем все остальные обработчики событий, которые могут закрыть меню
+        window.removeEventListener('resize', null);
+        document.removeEventListener('click', null);
+        
+        // Удаляем все обработчики jQuery
+        if (window.jQuery) {
+            jQuery(document).off();
+            jQuery(window).off();
+            jQuery('#sidebarToggle, #sidebarToggleTop').off();
+        }
+    });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
