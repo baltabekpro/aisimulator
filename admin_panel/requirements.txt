@@ -23,3 +23,6 @@ Pillow==9.5.0
 
 # Testing
 pytest==7.3.1
+
+# Server
+gunicorn==21.2.0

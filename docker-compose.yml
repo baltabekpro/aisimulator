@@ -56,6 +56,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
       - API_BASE_URL=http://api:8000/api/v1
+      - FLASK_APP=admin_panel.app
+      - FLASK_ENV=development
     ports:
       - "5000:5000"  # Публичный порт админ-панели
     command: gunicorn -w 2 -b 0.0.0.0:5000 "admin_panel.app:app"

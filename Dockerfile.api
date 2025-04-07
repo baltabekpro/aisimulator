@@ -2,16 +2,32 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Установка зависимостей
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy core package and app first
+COPY core/ /app/core/
+COPY app/ /app/app/
+
+# Install requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install uvicorn gunicorn
+RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
+RUN pip install numpy PyJWT
 
-# Копирование исходного кода
+# Copy setup.py
+COPY setup.py .
+
+# Install local packages
+RUN pip install -e .
+
+# Copy remaining files
 COPY . .
 
-# Экспонирование порта для API
+# Expose port for API
 EXPOSE 8000
 
-# Команда запуска
+# Command to run
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -2,16 +2,38 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Установка зависимостей
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install requirements first
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install gunicorn
 
-# Копирование исходного кода
+COPY admin_panel/requirements.txt admin_requirements.txt
+RUN pip install --no-cache-dir -r admin_requirements.txt
+
+# Install gunicorn explicitly
+RUN pip install gunicorn==21.2.0
+
+# Copy setup.py and install local package
+COPY setup.py .
+RUN pip install -e .
+
+# Copy source code
+COPY core/ /app/core/
+COPY admin_panel/ /app/admin_panel/
+
+# Copy remaining files
 COPY . .
 
-# Экспонирование порта для Admin панели
+# Expose port for admin panel
 EXPOSE 5000
 
-# Команда запуска
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "admin_panel.app:app"]
+# Create entrypoint script
+COPY ./scripts/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# Command to run
+ENTRYPOINT ["/docker-entrypoint.sh"]

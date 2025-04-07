@@ -2,12 +2,26 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Установка зависимостей
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install requirements first
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install python-telegram-bot[job-queue] aiohttp aiogram
 
-# Копирование исходного кода
+# Copy setup.py and install local package
+COPY setup.py .
+RUN pip install -e .
+
+# Copy source code
+COPY core/ /app/core/
+COPY bots/ /app/bots/
+
+# Copy remaining files
 COPY . .
 
-# Команда запуска
-CMD ["python", "-m", "bots.bot"]
+# Command to run
+CMD ["python", "-m", "bots.telegram_bot"]
