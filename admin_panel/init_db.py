@@ -22,7 +22,7 @@ sys.path.insert(0, parent_dir)
 
 # Now import from the module using relative imports
 from db.session import engine, Base, get_session
-from models import Admin, Character, User, Message, Memory, Event
+from admin_panel.models import AdminUser as Admin, UserView as User, CharacterView as Character, MessageView as Message
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

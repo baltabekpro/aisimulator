@@ -85,6 +85,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
       - API_BASE_URL=http://api:8000/api/v1
+    command: python -m bots.bot
     restart: unless-stopped
 
 volumes:
