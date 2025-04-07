@@ -4,26 +4,28 @@ services:
   # База данных PostgreSQL
   postgres:
     image: postgres:13
-    container_name: aibot-postgres
+    container_name: ${POSTGRES_CONTAINER_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=aibot
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=aibot
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aibot"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
       timeout: 5s
       retries: 5
+    ports:
+      - "5432:5432"
 
   # API сервер (FastAPI + Uvicorn)
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: aibot-api
+    container_name: ${API_CONTAINER_NAME}
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +45,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.admin
-    container_name: aibot-admin
+    container_name: ${ADMIN_CONTAINER_NAME}
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,7 +70,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.bot
-    container_name: aibot-telegram
+    container_name: ${BOT_CONTAINER_NAME}
     depends_on:
       postgres:
         condition: service_healthy
