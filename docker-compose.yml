@@ -36,7 +36,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?client_encoding=utf8
     ports:
       - "8000:8000"  # Публичный порт API
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -58,10 +58,11 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?client_encoding=utf8
       - API_BASE_URL=http://api:8000/api/v1
       - FLASK_APP=admin_panel.app
       - FLASK_ENV=development
+      - FLASK_DEBUG=true
     ports:
       - "5000:5000"  # Публичный порт админ-панели
     command: gunicorn -w 2 -b 0.0.0.0:5000 "admin_panel.app:app"
@@ -83,7 +84,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?client_encoding=utf8
       - API_BASE_URL=http://api:8000/api/v1
     command: python -m bots.bot
     restart: unless-stopped

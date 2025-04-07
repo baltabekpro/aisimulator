@@ -120,10 +120,12 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI instance with lifespan handler
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    description="API для взаимодействия с AI персонажами",
+    title="AI Simulator API",
+    description="API for AI Character Simulator",
     version="1.0.0",
-    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
+    docs_url="/docs",   # Enable Swagger UI at /docs
+    redoc_url="/redoc",  # Enable ReDoc at /redoc
+    openapi_url="/openapi.json",  # Enable OpenAPI schema
     lifespan=lifespan,
     debug=True  # Enable debug mode
 )
