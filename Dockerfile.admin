@@ -31,5 +31,5 @@ COPY . .
 # Expose port for admin panel
 EXPOSE 5000
 
-# Instead, use a direct command:
+# Direct command instead of entrypoint script
 CMD ["gunicorn", "admin_panel.app:app", "--bind", "0.0.0.0:5000", "--workers", "2"]
