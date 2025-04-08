@@ -13,6 +13,7 @@ import logging
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 from dotenv import load_dotenv
+from sqlalchemy import text, create_engine
 
 # Add the parent directory to sys.path to make module imports work
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,8 +22,11 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
 # Now import from the module using relative imports
-from db.session import engine, Base, get_session
-from admin_panel.models import AdminUser as Admin, UserView as User, CharacterView as Character, MessageView as Message
+try:
+    from db.session import engine, Base, get_session
+    from admin_panel.models import AdminUser as Admin, UserView as User, CharacterView as Character, MessageView as Message
+except ImportError:
+    print("Failed to import from existing modules, using direct SQL instead.")
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -34,7 +38,39 @@ def create_tables():
         logger.info("Создание таблиц базы данных PostgreSQL...")
         
         # Create tables if they don't exist
-        Base.metadata.create_all(bind=engine)
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Таблицы успешно созданы через SQLAlchemy")
+        except Exception as orm_error:
+            logger.error(f"Ошибка создания таблиц через ORM: {orm_error}")
+            logger.info("Пробуем создать таблицы напрямую через SQL...")
+            
+            # Fallback to direct SQL
+            try:
+                # Get database URL from environment
+                db_url = os.environ.get("DATABASE_URL")
+                if not db_url:
+                    db_url = "postgresql://aibot:postgres@postgres:5432/aibot"
+                
+                # Connect directly
+                direct_engine = create_engine(db_url)
+                with direct_engine.connect() as conn:
+                    # Create admin_users table
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS admin_users (
+                            id VARCHAR(36) PRIMARY KEY,
+                            username VARCHAR(50) UNIQUE NOT NULL,
+                            email VARCHAR(100),
+                            password_hash VARCHAR(200) NOT NULL,
+                            is_active BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    conn.commit()
+                    logger.info("Таблица admin_users создана через SQL")
+            except Exception as sql_error:
+                logger.error(f"Ошибка создания таблиц через SQL: {sql_error}")
+                raise
         
         logger.info("Таблицы успешно созданы")
         return True
@@ -47,56 +83,113 @@ def create_tables():
 def create_admin_user():
     """Создание администратора по умолчанию, если его не существует"""
     try:
-        session = get_session()
+        # Get database URL from environment
+        db_url = os.environ.get("DATABASE_URL")
+        if not db_url:
+            db_url = "postgresql://aibot:postgres@postgres:5432/aibot"
         
-        # Create default admin user
-        default_username = os.getenv('ADMIN_USERNAME', 'admin')
-        default_password = os.getenv('ADMIN_PASSWORD', 'admin_password')
-        
-        # Check if admin user already exists
+        # Try different approaches
         try:
-            existing_admin = session.query(Admin).filter_by(username=default_username).first()
-            if existing_admin:
-                logger.info("Администратор по умолчанию уже существует")
+            # Using ORM
+            session = get_session()
+            
+            # Create default admin user
+            default_username = os.getenv('ADMIN_USERNAME', 'admin')
+            default_password = os.getenv('ADMIN_PASSWORD', 'admin_password')
+            
+            # Check if admin user already exists
+            try:
+                existing_admin = session.query(Admin).filter_by(username=default_username).first()
+                if existing_admin:
+                    logger.info("Администратор по умолчанию уже существует (ORM)")
+                    return True
+            except:
+                # Table might not exist yet or other error, continue with creation
+                pass
+            
+            admin = Admin(
+                id=str(uuid.uuid4()),
+                username=default_username,
+                password_hash=generate_password_hash(default_password),
+                email="admin@example.com",
+                is_active=True,
+                created_at=datetime.utcnow()
+            )
+            
+            session.add(admin)
+            session.commit()
+            logger.info(f"Создан администратор по умолчанию: {default_username} (ORM)")
+            return True
+        except Exception as orm_error:
+            logger.error(f"Ошибка создания администратора через ORM: {orm_error}")
+            
+            # Fallback to direct SQL
+            try:
+                logger.info("Пробуем создать администратора напрямую через SQL...")
+                direct_engine = create_engine(db_url)
+                
+                default_username = os.getenv('ADMIN_USERNAME', 'admin')
+                default_password = os.getenv('ADMIN_PASSWORD', 'admin_password')
+                
+                with direct_engine.connect() as conn:
+                    # Check if user exists
+                    result = conn.execute(text(
+                        "SELECT COUNT(*) FROM admin_users WHERE username = :username"
+                    ), {"username": default_username})
+                    
+                    count = result.scalar()
+                    if count > 0:
+                        logger.info("Администратор по умолчанию уже существует (SQL)")
+                        return True
+                    
+                    # Create admin user
+                    admin_id = str(uuid.uuid4())
+                    password_hash = generate_password_hash(default_password)
+                    
+                    conn.execute(text("""
+                        INSERT INTO admin_users (id, username, email, password_hash, is_active)
+                        VALUES (:id, :username, :email, :password_hash, TRUE)
+                    """), {
+                        "id": admin_id,
+                        "username": default_username,
+                        "email": f"{default_username}@example.com",
+                        "password_hash": password_hash
+                    })
+                    conn.commit()
+                    logger.info(f"Создан администратор по умолчанию: {default_username} (SQL)")
                 return True
-        except:
-            # Table might not exist yet or other error, continue with creation
-            pass
-        
-        admin = Admin(
-            id=str(uuid.uuid4()),
-            username=default_username,
-            password_hash=generate_password_hash(default_password),
-            email="admin@example.com",
-            is_active=True,
-            created_at=datetime.utcnow()
-        )
-        
-        session.add(admin)
-        session.commit()
-        logger.info(f"Создан администратор по умолчанию: {default_username}")
-        return True
+            except Exception as sql_error:
+                logger.error(f"Ошибка создания администратора через SQL: {sql_error}")
+                raise
     except Exception as e:
         logger.error(f"Ошибка создания администратора: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        if session:
-            session.rollback()
         return False
-    finally:
-        if session:
-            session.close()
 
 def check_database_connection():
     """Проверка подключения к базе данных"""
     try:
-        from sqlalchemy import inspect
+        # Get database URL from environment
+        db_url = os.environ.get("DATABASE_URL")
+        if not db_url:
+            db_url = "postgresql://aibot:postgres@postgres:5432/aibot"
         
-        # Проверяем соединение
-        inspector = inspect(engine)
-        tables = inspector.get_table_names()
+        direct_engine = create_engine(db_url)
         
-        logger.info(f"Успешное подключение к PostgreSQL. Найдено таблиц: {len(tables)}")
+        with direct_engine.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            assert result.scalar() == 1
+            logger.info("Успешное подключение к PostgreSQL")
+            
+            # Check for admin_users table
+            result = conn.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'admin_users')"
+            ))
+            if result.scalar():
+                logger.info("Таблица admin_users существует")
+            else:
+                logger.warning("Таблица admin_users не существует")
         return True
     except Exception as e:
         logger.error(f"Ошибка подключения к базе данных: {e}")
@@ -107,6 +200,9 @@ def check_database_connection():
 def main():
     print("🔧 Инициализация базы данных административной панели 🔧")
     print("----------------------------------------------------")
+    
+    # Load environment variables
+    load_dotenv()
     
     # Проверка подключения к базе данных
     print("Проверка подключения к базе данных PostgreSQL...")

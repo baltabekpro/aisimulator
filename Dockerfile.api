@@ -2,32 +2,22 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy core package and app first
-COPY core/ /app/core/
-COPY app/ /app/app/
-
-# Install requirements
+# Установка зависимостей
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
-RUN pip install numpy PyJWT
+RUN pip install uvicorn gunicorn requests
 
-# Copy setup.py
-COPY setup.py .
-
-# Install local packages
-RUN pip install -e .
-
-# Copy remaining files
+# Копирование исходного кода
 COPY . .
 
-# Expose port for API
+# Make scripts executable
+RUN chmod +x /app/scripts/*.sh
+
+# Экспонирование порта для API
 EXPOSE 8000
 
-# Command to run
+# Command is set in docker-compose.yml
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

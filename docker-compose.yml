@@ -1,33 +1,30 @@
-version: '3.8'
-
 services:
   # База данных PostgreSQL
   postgres:
-    container_name: aibot-postgres-1
-    image: postgres:13-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+    image: postgres:13
+    container_name: aibot-postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    command: postgres -c 'max_connections=200'
+      - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh
+    environment:
+      - POSTGRES_USER=aibot
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=aibot
+    ports:
+      - "5432:5432"  # Expose PostgreSQL port for debugging
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U aibot"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
-    restart: always
-    ports:
-      - "5432:5432"
 
   # API сервер (FastAPI + Uvicorn)
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: ${API_CONTAINER_NAME}
+    container_name: aibot-api
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,10 +33,17 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?client_encoding=utf8
+      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
+      - API_BASE_URL=http://api:8000/api/v1
+      - DEBUG=True
     ports:
       - "8000:8000"  # Публичный порт API
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: >
+      bash -c "
+        chmod +x /app/scripts/fix-api.sh &&
+        /app/scripts/fix-api.sh &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
     restart: unless-stopped
 
   # Admin панель (Flask + Gunicorn)
@@ -47,25 +51,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.admin
-    container_name: ${ADMIN_CONTAINER_NAME}
+    container_name: aibot-admin
     depends_on:
       postgres:
         condition: service_healthy
-      api:
-        condition: service_started
     volumes:
       - ./:/app
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?client_encoding=utf8
+      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
       - API_BASE_URL=http://api:8000/api/v1
-      - FLASK_APP=admin_panel.app
-      - FLASK_ENV=development
-      - FLASK_DEBUG=true
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin_password
     ports:
       - "5000:5000"  # Публичный порт админ-панели
-    command: gunicorn -w 2 -b 0.0.0.0:5000 "admin_panel.app:app"
+    command: >
+      bash -c "
+        chmod +x /app/scripts/docker-entrypoint.sh &&
+        /app/scripts/docker-entrypoint.sh
+      "
     restart: unless-stopped
 
   # Telegram бот
@@ -73,7 +78,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.bot
-    container_name: ${BOT_CONTAINER_NAME}
+    container_name: aibot-telegram
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,11 +89,15 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?client_encoding=utf8
+      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
       - API_BASE_URL=http://api:8000/api/v1
-    command: python -m bots.bot
+    command: >
+      bash -c "
+        chmod +x /app/scripts/fix-telegram.sh &&
+        /app/scripts/fix-telegram.sh &&
+        python -m bots.bot
+      "
     restart: unless-stopped
 
 volumes:
   postgres_data:
-    name: aibot_postgres_data

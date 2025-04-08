@@ -2,34 +2,27 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Install PostgreSQL client utilities for health checks - Use apt-get with -y flag
+RUN apt-get update && \
+    apt-get install -y postgresql-client && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install requirements first
+# Установка зависимостей
 COPY requirements.txt .
+COPY admin_panel/requirements.txt ./admin_requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-
-COPY admin_panel/requirements.txt admin_requirements.txt
 RUN pip install --no-cache-dir -r admin_requirements.txt
+RUN pip install gunicorn psycopg2-binary python-dotenv
 
-# Install gunicorn explicitly
-RUN pip install gunicorn==21.2.0
-
-# Copy setup.py and install local package
-COPY setup.py .
-RUN pip install -e .
-
-# Copy source code
-COPY core/ /app/core/
-COPY admin_panel/ /app/admin_panel/
-
-# Copy remaining files
+# Копирование исходного кода
 COPY . .
 
-# Expose port for admin panel
+# Make the entrypoint script executable
+RUN chmod +x /app/scripts/docker-entrypoint.sh
+
+# Экспонирование порта для Admin панели
 EXPOSE 5000
 
-# Direct command instead of entrypoint script
-CMD ["gunicorn", "admin_panel.app:app", "--bind", "0.0.0.0:5000", "--workers", "2"]
+# Entrypoint is set in docker-compose.yml
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "admin_panel.app:app"]

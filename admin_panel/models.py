@@ -1,56 +1,81 @@
-# filepath: admin_panel/models.py
+"""
+Database models for the admin panel.
+"""
+import uuid
+import logging
+from datetime import datetime
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, ForeignKey, MetaData
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.sql import func
-from uuid import uuid4
 
-# Create a separate MetaData instance for admin panel models
-# to avoid conflicts with the main application models
-admin_metadata = MetaData()
-AdminBase = declarative_base(metadata=admin_metadata)
+from admin_panel.extensions import db
 
-# Admin User model
-class AdminUser(AdminBase, UserMixin):
-    __tablename__ = "admin_users"
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class AdminUser(db.Model, UserMixin):
+    """Admin user model for authentication."""
+    __tablename__ = 'admin_users'
     
-    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    username = Column(String(50), unique=True, nullable=False)
-    email = Column(String(100), unique=True, nullable=True)
-    password_hash = Column(String(200), nullable=False)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=func.now())
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    email = db.Column(db.String(100), nullable=True)
+    password_hash = db.Column(db.String(200), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-        
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-        
+    def __repr__(self):
+        return f"<AdminUser {self.username}>"
+    
     def get_id(self):
-        return self.id
+        """Return the user ID as a string as required by Flask-Login."""
+        return str(self.id)
+    
+    @property
+    def is_authenticated(self):
+        """Return True if the user is authenticated."""
+        return True
+    
+    @property
+    def is_anonymous(self):
+        """Return False as anonymous users aren't supported."""
+        return False
 
-# View-only classes for other models to prevent SQLAlchemy conflicts
-# These are not ORM models, just data containers
+# View models for other tables in the database
+class UserView(db.Model):
+    """User model for viewing user data."""
+    __tablename__ = 'users'
+    
+    id = db.Column(db.String(36), primary_key=True)
+    username = db.Column(db.String(50))
+    email = db.Column(db.String(100))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime)
+    
+    def __repr__(self):
+        return f"<User {self.username}>"
 
-# View-only model for Messages - used only for admin panel displays
-class MessageView:
-    """View-only representation of a Message"""
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+class CharacterView(db.Model):
+    """Character model for viewing character data."""
+    __tablename__ = 'characters'
+    
+    id = db.Column(db.String(36), primary_key=True)
+    name = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime)
+    
+    def __repr__(self):
+        return f"<Character {self.name}>"
 
-# View-only model for Users
-class UserView:
-    """View-only representation of a User"""
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+class MessageView(db.Model):
+    """Message model for viewing message data."""
+    __tablename__ = 'messages'
+    
+    id = db.Column(db.String(36), primary_key=True)
+    user_id = db.Column(db.String(36))
+    character_id = db.Column(db.String(36))
+    content = db.Column(db.Text)
+    created_at = db.Column(db.DateTime)
+    
+    def __repr__(self):
+        return f"<Message {self.id}>"
 
-# View-only model for Characters
-class CharacterView:
-    """View-only representation of a Character"""
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+logger.info("Models initialized")

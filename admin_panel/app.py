@@ -25,7 +25,7 @@ from datetime import datetime
 # from admin_panel.context_processors import utility_processor
 
 # Создадим функцию utility_processor прямо в файле app.py
-import datetime
+import datetime as dt
 import os
 
 def utility_processor():
@@ -38,7 +38,7 @@ def utility_processor():
         'isinstance': isinstance,
         'str': str,
         'len': len,
-        'current_year': datetime.datetime.now().year,
+        'current_year': datetime.now().year,
         'app_version': os.getenv('APP_VERSION', '1.0.0'),
         'is_admin': lambda user: user and hasattr(user, 'is_admin') and user.is_admin,
         'debug_mode': os.getenv('DEBUG', 'False').lower() == 'true'
@@ -267,7 +267,7 @@ def dashboard():
         
         # Get recent users
         query = """
-            SELECT id, username, email, created_at 
+            SELECT user_id as id, username, email, created_at 
             FROM users 
             ORDER BY created_at DESC 
             LIMIT 5
@@ -525,10 +525,10 @@ def messages():
                        ELSE m.recipient_id 
                    END as recipient_name
             FROM messages m
-            LEFT JOIN users u1 ON m.sender_id = u1.id AND m.sender_type = 'user'
-            LEFT JOIN characters c1 ON m.sender_id = c1.id AND m.sender_type = 'character'
-            LEFT JOIN users u2 ON m.recipient_id = u2.id AND m.recipient_type = 'user'
-            LEFT JOIN characters c2 ON m.recipient_id = c2.id AND m.recipient_type = 'character'
+            LEFT JOIN users u1 ON m.sender_id::text = u1.user_id::text AND m.sender_type = 'user'
+            LEFT JOIN characters c1 ON m.sender_id::text = c1.id::text AND m.sender_type = 'character'
+            LEFT JOIN users u2 ON m.recipient_id::text = u2.user_id::text AND m.recipient_type = 'user'
+            LEFT JOIN characters c2 ON m.recipient_id::text = c2.id::text AND m.recipient_type = 'character'
             ORDER BY m.created_at DESC
             LIMIT 100
         """
@@ -566,7 +566,7 @@ def memories():
             # Get memories with character names - don't filter by user ID
             cursor.execute("""
                 SELECT m.id, m.character_id, c.name as character_name, 
-                       m.memory_type, m.category, m.content, m.importance,
+                       m.content, m.importance,
                        m.user_id, m.created_at
                 FROM memory_entries m
                 LEFT JOIN characters c ON c.id::text = m.character_id::text
@@ -611,9 +611,9 @@ def character_memories(character_id):
                 flash("Character not found", "danger")
                 return redirect(url_for('memories'))
             
-            # Get memories for this character - don't filter by user ID
+            # Get memories for this character - adjusting columns to match table schema
             cursor.execute("""
-                SELECT id, memory_type, category, content, importance, user_id, created_at
+                SELECT id, content, importance, user_id, created_at
                 FROM memory_entries
                 WHERE character_id::text = %s
                 ORDER BY created_at DESC
@@ -634,8 +634,6 @@ def add_memory():
     """Add a new memory"""
     if request.method == 'POST':
         character_id = request.form.get('character_id')
-        memory_type = request.form.get('memory_type')
-        category = request.form.get('category')
         content = request.form.get('content')
         importance = request.form.get('importance', 5)
         user_id = request.form.get('user_id')
@@ -645,10 +643,10 @@ def add_memory():
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO memory_entries 
-                    (id, character_id, memory_type, category, content, importance, user_id, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (id, character_id, content, importance, user_id, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """, (
-                    str(uuid.uuid4()), character_id, memory_type, category, 
+                    str(uuid.uuid4()), character_id, 
                     content, importance, user_id, datetime.now()
                 ))
                 conn.commit()
@@ -789,7 +787,7 @@ def add_character():
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO characters (id, name, age, gender, background, 
-                                           personality_traits, interests, created_at) 
+                                           personality, interests, created_at) 
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     character_id, name, age, gender, background, 

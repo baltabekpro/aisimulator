@@ -9,11 +9,14 @@ setup(
         "uvicorn",
         "sqlalchemy",
         "pydantic",
+        "pydantic-settings",  # Add pydantic-settings explicitly
         "python-jose[cryptography]",
         "python-multipart",
         "passlib[bcrypt]",
         "python-dotenv",
         "psycopg2-binary",
         "alembic",
+        "pyjwt",
+        "requests",
     ],
 )

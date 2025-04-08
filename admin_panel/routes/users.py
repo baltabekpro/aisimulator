@@ -1,97 +1,91 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
-from typing import List
+"""
+User management routes for the admin panel
+"""
 import uuid
+import logging
+from flask import render_template, redirect, url_for, flash, request
+from flask_login import login_required
+from werkzeug.security import generate_password_hash
 
-from admin_panel.dependencies import templates, get_current_admin_user
-from admin_panel.database import get_db
-from sqlalchemy import text
+from admin_panel.routes import users_bp
+from admin_panel.database import db_session
+from admin_panel.models import UserView
 
-router = APIRouter(prefix="/users", tags=["users"])
+logger = logging.getLogger(__name__)
 
-@router.get("/", response_class=HTMLResponse)
-async def list_users(
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin_user)
-):
+@users_bp.route('/')
+@login_required
+def list_users():
     """List all users"""
-    # Get users with raw SQL to avoid UUID issues
-    users = db.execute(text("""
-        SELECT id, username, email, created_at, is_active 
-        FROM users
-        ORDER BY created_at DESC
-    """)).fetchall()
-    
-    # Convert to list of dicts
-    user_list = []
-    for user in users:
-        user_list.append({
-            "id": user[0],
-            "username": user[1],
-            "email": user[2],
-            "created_at": user[3].strftime("%Y-%m-%d %H:%M:%S") if hasattr(user[3], "strftime") else str(user[3]),
-            "is_active": user[4]
-        })
-    
-    return templates.TemplateResponse(
-        "users/list.html",
-        {
-            "request": request,
-            "title": "Users",
-            "users": user_list
-        }
-    )
+    try:
+        with db_session() as db:
+            users = db.query(UserView).order_by(UserView.created_at.desc()).all()
+        return render_template('users/list.html', users=users)
+    except Exception as e:
+        logger.error(f"Error loading users: {e}")
+        flash(f"Error loading users: {e}", "danger")
+        return render_template('users/list.html', users=[])
 
-@router.get("/create", response_class=HTMLResponse)
-async def create_user_form(
-    request: Request,
-    current_user = Depends(get_current_admin_user)
-):
-    """Display user creation form"""
-    return templates.TemplateResponse(
-        "users/create.html",
-        {
-            "request": request,
-            "title": "Create User"
-        }
-    )
-
-@router.post("/create")
-async def create_user(
-    username: str = Form(...),
-    email: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin_user)
-):
+@users_bp.route('/create', methods=['GET', 'POST'])
+@login_required
+def create_user():
     """Create a new user"""
-    # Check if user already exists
-    existing = db.execute(text("""
-        SELECT id FROM users WHERE username = :username OR email = :email
-    """), {"username": username, "email": email}).fetchone()
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        # Simple validation
+        if not username or not email or not password:
+            flash('All fields are required', 'danger')
+            return render_template('users/create.html')
+        
+        try:
+            with db_session() as db:
+                # Check if user already exists
+                existing_user = db.query(UserView).filter(
+                    (UserView.username == username) | (UserView.email == email)
+                ).first()
+                
+                if existing_user:
+                    flash('Username or email already in use', 'danger')
+                    return render_template('users/create.html')
+                
+                # Create new user object
+                new_user = UserView(
+                    id=str(uuid.uuid4()),
+                    username=username,
+                    email=email,
+                    password_hash=generate_password_hash(password),
+                    is_active=True
+                )
+                
+                db.add(new_user)
+                
+                flash('User created successfully', 'success')
+                return redirect(url_for('users.list_users'))
+        except Exception as e:
+            logger.error(f"Error creating user: {e}")
+            flash(f"Error creating user: {e}", "danger")
     
-    if existing:
-        raise HTTPException(status_code=400, detail="Username or email already exists")
-    
-    # Create hashed password
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    hashed_password = pwd_context.hash(password)
-    
-    # Add the user
-    user_id = str(uuid.uuid4())
-    db.execute(text("""
-        INSERT INTO users (id, username, email, password_hash, is_active)
-        VALUES (:id, :username, :email, :password_hash, TRUE)
-    """), {
-        "id": user_id,
-        "username": username,
-        "email": email,
-        "password_hash": hashed_password
-    })
-    
-    db.commit()
-    
-    return RedirectResponse(url="/users", status_code=303)
+    return render_template('users/create.html')
+
+@users_bp.route('/<user_id>')
+@login_required
+def view_user(user_id):
+    """View a user's details"""
+    try:
+        with db_session() as db:
+            user = db.query(UserView).filter_by(id=user_id).first()
+            
+            if not user:
+                flash('User not found', 'danger')
+                return redirect(url_for('users.list_users'))
+            
+            # Get user-specific data here if needed
+            
+            return render_template('users/view.html', user=user)
+    except Exception as e:
+        logger.error(f"Error viewing user: {e}")
+        flash(f"Error viewing user: {e}", "danger")
+        return redirect(url_for('users.list_users'))

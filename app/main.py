@@ -1,6 +1,34 @@
-import torch
-if not hasattr(torch.library, "register_fake"):
-    torch.library.register_fake = lambda *args, **kwargs: None
+# Handle torch import more robustly
+try:
+    import torch
+    # Only try to access library attribute if torch version is new enough
+    try:
+        if not hasattr(torch, "library") or not hasattr(torch.library, "register_fake"):
+            # Create dummy register_fake function if it doesn't exist
+            class DummyLibrary:
+                @staticmethod
+                def register_fake(*args, **kwargs):
+                    pass
+            
+            if not hasattr(torch, "library"):
+                torch.library = DummyLibrary()
+            else:
+                torch.library.register_fake = DummyLibrary.register_fake
+    except Exception as e:
+        print(f"Error patching torch: {e}")
+except ImportError:
+    # Create dummy torch module for compatibility
+    class DummyLibrary:
+        @staticmethod
+        def register_fake(*args, **kwargs):
+            pass
+    
+    class DummyTorch:
+        def __init__(self):
+            self.library = DummyLibrary()
+    
+    torch = DummyTorch()
+    print("PyTorch not available, using dummy implementation")
 
 from datetime import datetime
 from fastapi import FastAPI, Depends
@@ -120,12 +148,10 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI instance with lifespan handler
 app = FastAPI(
-    title="AI Simulator API",
-    description="API for AI Character Simulator",
+    title=settings.PROJECT_NAME,
+    description="API для взаимодействия с AI персонажами",
     version="1.0.0",
-    docs_url="/docs",   # Enable Swagger UI at /docs
-    redoc_url="/redoc",  # Enable ReDoc at /redoc
-    openapi_url="/openapi.json",  # Enable OpenAPI schema
+    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
     lifespan=lifespan,
     debug=True  # Enable debug mode
 )

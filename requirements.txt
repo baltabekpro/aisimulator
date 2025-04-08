@@ -1,45 +1,32 @@
-# Core Framework
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.7
-email-validator>=2.1.0
+# Web framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+starlette>=0.27.0
 
 # Database
-sqlalchemy>=2.0.27
-alembic>=1.13.1
-psycopg2-binary>=2.9.9  # For PostgreSQL in production
-sqlalchemy-utils>=0.41.1
+sqlalchemy>=1.4.47,<2.0.0
+alembic>=1.11.1
+psycopg2-binary>=2.9.6
 
-# Settings and Environment
-pydantic>=2.6.0
-pydantic-settings>=2.1.0
-python-dotenv>=1.0.1
+# Data validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0  # Add pydantic-settings explicitly
+email-validator>=2.0.0
 
-# Authentication and Security
+# Authentication
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
-cryptography>=42.0.0
+python-multipart>=0.0.6
+pyjwt>=2.7.0
 
-# AI and LLM Integrations
-google-generativeai>=0.4.0  # Google Gemini
-openai>=1.12.0  # For OpenAI models
-langchain>=0.1.4  # Framework for LLM applications
-langchain-openai>=0.0.5  # OpenAI integration for LangChain
-tiktoken>=0.5.2  # Token counting for OpenAI models
-
-# HTTP Clients
+# HTTP client
 requests>=2.31.0
-httpx>=0.26.0  # Async HTTP client
+aiohttp>=3.8.5
 
 # Utilities
-tenacity>=8.2.3  # For retrying operations
-loguru>=0.7.2  # Better logging
-Pillow>=10.2.0  # Image processing
-beautifulsoup4>=4.12.2  # HTML parsing
-python-dateutil>=2.8.2  # Date handling
-pytz>=2023.3  # Timezone support
+python-dotenv>=1.0.0
+ujson>=5.8.0
+tenacity>=8.2.2
 
-# Testing
-pytest>=7.4.3
-pytest-asyncio>=0.23.2
-pytest-cov>=4.1.0
+# Logging
+loguru>=0.7.0

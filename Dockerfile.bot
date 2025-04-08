@@ -2,26 +2,20 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies
+COPY requirements.txt ./requirements.txt
+COPY bots/requirements-bot.txt ./bot-requirements.txt
 
-# Install requirements first
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install python-telegram-bot[job-queue] aiohttp aiogram
-
-# Copy setup.py and install local package
-COPY setup.py .
-RUN pip install -e .
+# Install bot dependencies directly
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r bot-requirements.txt \
+    && pip install --no-cache-dir aiohttp aiogram python-dotenv
 
 # Copy source code
-COPY core/ /app/core/
-COPY bots/ /app/bots/
-
-# Copy remaining files
 COPY . .
 
-# Command to run
-CMD ["python", "-m", "bots.telegram_bot"]
+# Make scripts executable
+RUN chmod +x /app/scripts/*.sh || echo "Warning: Could not make scripts executable"
+
+# Command to run the bot
+CMD ["python", "-m", "bots.bot"]
