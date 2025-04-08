@@ -80,6 +80,7 @@ function show_help {
     echo -e "  ${GREEN}fix-postgres${NC}  - Fix PostgreSQL connection issues"
     echo -e "  ${GREEN}diagnose${NC}      - Run diagnostics on containers"
     echo -e "  ${GREEN}help${NC}          - Show this help message"
+    echo -e "  ${GREEN}create-test-chars${NC} - Create test characters"
 }
 
 # Function to start all services using Docker Compose
@@ -243,6 +244,13 @@ function check_status {
     fi
 }
 
+# Function to create test characters
+function create_test_chars {
+    echo -e "${BLUE}Creating test characters...${NC}"
+    python scripts/create_test_characters.py
+    echo -e "${GREEN}Test characters created!${NC}"
+}
+
 # Parse command line arguments
 case "$1" in
     start)
@@ -301,6 +309,9 @@ case "$1" in
         ;;
     diagnose)
         run_diagnostics
+        ;;
+    create-test-chars)
+        create_test_chars
         ;;
     help)
         show_help

@@ -40,7 +40,7 @@ from dotenv import load_dotenv
 
 # Add missing imports
 from app.config import settings
-from app.api.v1 import auth, chat, debug
+from app.api.v1 import auth, chat, debug, interactions
 
 # Explicitly load environment variables
 load_dotenv()
@@ -176,6 +176,13 @@ app.include_router(
     chat.router,
     prefix=f"{settings.API_V1_PREFIX}/chat",
     tags=["chat"]
+)
+
+# Add the new interactions router
+app.include_router(
+    interactions.router,
+    prefix=f"{settings.API_V1_PREFIX}",
+    tags=["interactions"]
 )
 
 # Fix for debug router - make sure it's being included unconditionally or based on debug setting
