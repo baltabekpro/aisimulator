@@ -13,6 +13,8 @@ COPY requirements.txt .
 COPY admin_panel/requirements.txt ./admin_requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir -r admin_requirements.txt
+# Explicitly install Flask extensions to ensure they're available
+RUN pip install --no-cache-dir Flask-SQLAlchemy==3.0.3 Flask-Migrate==4.0.4 Flask-Login==0.6.2 Flask-WTF==1.1.1
 RUN pip install gunicorn psycopg2-binary python-dotenv
 
 # Копирование исходного кода

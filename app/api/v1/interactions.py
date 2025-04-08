@@ -38,6 +38,17 @@ class MatchProfile(BaseModel):
     photo_url: Optional[str] = None
     unread_count: int = 0
 
+# Add model for Gift
+class GiftItem(BaseModel):
+    id: str
+    name: str
+    description: str
+    price: int
+    icon_url: str
+    is_premium: bool = False
+    reactions: List[str] = Field(default_factory=list, description="Possible character reactions to this gift")
+    available: bool = True
+
 # --- Endpoints ---
 @router.post("/characters/{character_id}/like", response_model=InteractionResponse)
 async def like_character(
@@ -230,3 +241,82 @@ async def dislike_character_alt(like_request: LikeRequest, current_user = Depend
 async def superlike_character_alt(like_request: LikeRequest, current_user = Depends(get_current_user)):
     """Alternative endpoint for superliking a character"""
     return await superlike_character(like_request.character_id, current_user)
+
+# Add endpoint for retrieving gifts
+@router.get("/gifts", response_model=List[GiftItem])
+async def get_available_gifts(
+    current_user = Depends(get_current_user)
+):
+    """Get a list of gifts that can be sent to characters"""
+    # In a real implementation, fetch gifts from database
+    # For demo purposes, return sample data
+    return [
+        GiftItem(
+            id="gift-1",
+            name="Букет цветов",
+            description="Красивый букет свежих цветов. Классический знак внимания.",
+            price=100,
+            icon_url="https://example.com/gifts/flowers.png",
+            is_premium=False,
+            reactions=["grateful", "happy", "flattered"],
+            available=True
+        ),
+        GiftItem(
+            id="gift-2",
+            name="Шоколадные конфеты",
+            description="Коробка эксклюзивных шоколадных конфет. Сладкий подарок для особого случая.",
+            price=150,
+            icon_url="https://example.com/gifts/chocolates.png",
+            is_premium=False,
+            reactions=["happy", "delighted", "excited"],
+            available=True
+        ),
+        GiftItem(
+            id="gift-3",
+            name="Игрушечный медведь",
+            description="Мягкий плюшевый медведь. Идеальный милый подарок.",
+            price=200,
+            icon_url="https://example.com/gifts/teddybear.png",
+            is_premium=False,
+            reactions=["touched", "happy", "affectionate"],
+            available=True
+        ),
+        GiftItem(
+            id="gift-4",
+            name="Ювелирное украшение",
+            description="Элегантное ювелирное украшение. Демонстрирует ваши серьезные намерения.",
+            price=500,
+            icon_url="https://example.com/gifts/jewelry.png",
+            is_premium=True,
+            reactions=["surprised", "excited", "grateful", "blushing"],
+            available=True
+        ),
+        GiftItem(
+            id="gift-5",
+            name="Парфюм",
+            description="Флакон дорогого парфюма. Изысканный и чувственный подарок.",
+            price=350,
+            icon_url="https://example.com/gifts/perfume.png",
+            is_premium=True,
+            reactions=["impressed", "grateful", "intrigued"],
+            available=True
+        )
+    ]
+
+# Add endpoint for sending a gift to a character
+@router.post("/characters/{character_id}/gift", response_model=InteractionResponse)
+async def send_gift(
+    character_id: str = Path(..., description="Character ID to send gift to"),
+    gift_id: str = Query(..., description="ID of the gift to send"),
+    current_user = Depends(get_current_user)
+):
+    """Send a gift to a character"""
+    # In a real implementation, record the gift in the database
+    # and handle character's reaction
+    
+    # For demo purposes, return a successful response
+    return InteractionResponse(
+        success=True,
+        message=f"Successfully sent gift {gift_id} to character {character_id}",
+        match=False
+    )
