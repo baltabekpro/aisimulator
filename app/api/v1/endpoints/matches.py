@@ -18,5 +18,6 @@ def get_matches(
     """
     Get all matches for the current user.
     """
-    matches = get_user_matches(db, current_user.id, limit, offset)
+    # Using user_id instead of id to match the User model
+    matches = get_user_matches(db, current_user.user_id, limit, offset)
     return matches

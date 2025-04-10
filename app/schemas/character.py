@@ -1,6 +1,6 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field, validator
-import datetime
+from datetime import datetime
 import uuid
 
 class CharacterBase(BaseModel):
@@ -30,8 +30,8 @@ class CharacterResponse(CharacterBase):
     id: str
     avatar_url: Optional[str] = None
     bio_summary: Optional[str] = None
-    created_at: datetime.datetime
-    updated_at: Optional[datetime.datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -42,4 +42,4 @@ class MatchNotification(BaseModel):
     character_name: str
     avatar_url: Optional[str] = None
     message: str = "You have a new match!"
-    created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
+    created_at: datetime = Field(default_factory=datetime.now)

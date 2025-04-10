@@ -1,30 +1,24 @@
 import uuid
 from datetime import datetime
-import bcrypt
 from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+import bcrypt
 
-from core.db.base import Base
+from app.db.base_class import Base
 
 class User(Base):
-    """
-    User model
-    """
     __tablename__ = "users"
-    
+
     user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String(50), nullable=False, unique=True)
-    email = Column(String(100), nullable=False, unique=True)
-    password_hash = Column(String(255), nullable=False)  # Changed from hashed_password to match the database schema
-    name = Column(String(100), nullable=True)  # This is the column that was missing
+    username = Column(String(50), unique=True, nullable=False)
+    email = Column(String(100), unique=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)  # This matches the database column name
+    name = Column(String(100))
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships will be defined here if needed
     
     def set_password(self, password: str):
         """Set the user's password hash"""

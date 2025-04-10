@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS messages (
   updated_at TIMESTAMP
 );
 
+-- Create index to improve joins on sender and recipient IDs
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, sender_type);
+CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, recipient_type);
+
 -- Create memory_entries table for character memories
 CREATE TABLE IF NOT EXISTS memory_entries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -76,6 +80,49 @@ CREATE TABLE IF NOT EXISTS memory_entries (
     REFERENCES users(user_id)
     ON DELETE CASCADE
 );
+
+-- Update to add matches table for character interactions
+
+-- Create matches table if doesn't exist
+CREATE TABLE IF NOT EXISTS matches (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL,
+  character_id UUID NOT NULL,
+  match_strength FLOAT DEFAULT 0.5,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP,
+  CONSTRAINT fk_user
+    FOREIGN KEY(user_id) 
+    REFERENCES users(user_id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_character
+    FOREIGN KEY(character_id) 
+    REFERENCES characters(id)
+    ON DELETE CASCADE
+);
+
+-- Create interactions table if doesn't exist
+CREATE TABLE IF NOT EXISTS interactions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL,
+  character_id UUID NOT NULL,
+  interaction_type VARCHAR(50) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_interaction_user
+    FOREIGN KEY(user_id) 
+    REFERENCES users(user_id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_interaction_character
+    FOREIGN KEY(character_id) 
+    REFERENCES characters(id)
+    ON DELETE CASCADE
+);
+
+-- Create indexes to improve query performance
+CREATE INDEX IF NOT EXISTS idx_matches_user ON matches(user_id);
+CREATE INDEX IF NOT EXISTS idx_matches_character ON matches(character_id);
+CREATE INDEX IF NOT EXISTS idx_interactions_user ON interactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_interactions_character ON interactions(character_id);
 
 -- Create test admin user (password: admin123)
 INSERT INTO users (username, email, password_hash, name, is_admin, is_active)
