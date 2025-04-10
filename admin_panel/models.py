@@ -45,10 +45,12 @@ class UserView(db.Model):
     """User model for viewing user data."""
     __tablename__ = 'users'
     
-    id = db.Column(db.String(36), primary_key=True)
+    user_id = db.Column(db.String(36), primary_key=True)
     username = db.Column(db.String(50))
     email = db.Column(db.String(100))
+    password_hash = db.Column(db.String(255))
     is_active = db.Column(db.Boolean, default=True)
+    is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime)
     
     def __repr__(self):

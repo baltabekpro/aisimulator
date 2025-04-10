@@ -51,9 +51,9 @@ def create_user():
                     flash('Username or email already in use', 'danger')
                     return render_template('users/create.html')
                 
-                # Create new user object
+                # Create new user object - using user_id instead of id
                 new_user = UserView(
-                    id=str(uuid.uuid4()),
+                    user_id=str(uuid.uuid4()),
                     username=username,
                     email=email,
                     password_hash=generate_password_hash(password),
@@ -76,7 +76,7 @@ def view_user(user_id):
     """View a user's details"""
     try:
         with db_session() as db:
-            user = db.query(UserView).filter_by(id=user_id).first()
+            user = db.query(UserView).filter_by(user_id=user_id).first()
             
             if not user:
                 flash('User not found', 'danger')
