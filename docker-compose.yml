@@ -5,12 +5,14 @@ services:
     container_name: aibot-postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Use a more resilient approach for init script
-      - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh:ro
+      # Mount init script as an individual file, not a directory
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
     environment:
       - POSTGRES_USER=aibot
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=aibot
+      # Add this to control initialization of test data
+      - POSTGRES_SEED_DATA=${SEED_TEST_DATA:-true}
     ports:
       - "5432:5432"  # Expose PostgreSQL port for debugging
     restart: unless-stopped
@@ -19,6 +21,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Remove the chmod command that was causing errors
+    # Use the official entrypoint directly
 
   # API сервер (FastAPI + Uvicorn)
   api:

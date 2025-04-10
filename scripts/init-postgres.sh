@@ -1,31 +1,149 @@
 #!/bin/bash
 set -e
 
-# This script is executed by PostgreSQL container at initialization
+# Function for error handling
+handle_error() {
+  echo "Error: $1"
+  exit 1
+}
 
+echo "Running PostgreSQL initialization script..."
+
+# Create extensions if they don't exist
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    -- Create admin_users table if it doesn't exist
-    CREATE TABLE IF NOT EXISTS admin_users (
-        id VARCHAR(36) PRIMARY KEY,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        email VARCHAR(100),
-        password_hash VARCHAR(200) NOT NULL,
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    -- Insert default admin user if none exists
-    INSERT INTO admin_users (id, username, password_hash, is_active)
-    VALUES (
-        'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        'admin',
-        'pbkdf2:sha256:150000\$KKgd0xN3\$d57b15c874bd9b5f30d7c1ef6006d1a162970a702e9e76bb51a1f7543b63212b',
-        true
-    )
-    ON CONFLICT (username) DO NOTHING;
-    
-    -- Set permissions
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $POSTGRES_USER;
+  CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+  CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 EOSQL
 
-echo "PostgreSQL initialization completed"
+# Create tables structure
+echo "Creating initial schema..."
+
+# Create users table
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+  -- Create users table if it doesn't exist
+  CREATE TABLE IF NOT EXISTS users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+    is_admin BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+  );
+
+  -- Create characters table
+  CREATE TABLE IF NOT EXISTS characters (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(100) NOT NULL,
+    age INTEGER,
+    gender VARCHAR(20) DEFAULT 'female' NOT NULL,
+    personality JSONB DEFAULT '{}',
+    background TEXT,
+    interests JSONB DEFAULT '[]',
+    appearance JSONB DEFAULT '{}',
+    system_prompt TEXT,
+    greeting_message TEXT,
+    avatar_url TEXT,
+    creator_id UUID,
+    is_active BOOLEAN DEFAULT TRUE,
+    character_metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    CONSTRAINT fk_creator
+      FOREIGN KEY(creator_id) 
+      REFERENCES users(user_id)
+      ON DELETE SET NULL
+  );
+
+  -- Create messages table
+  CREATE TABLE IF NOT EXISTS messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sender_id UUID NOT NULL,
+    sender_type VARCHAR(50) NOT NULL,
+    recipient_id UUID NOT NULL,
+    recipient_type VARCHAR(50) NOT NULL,
+    content TEXT NOT NULL,
+    emotion VARCHAR(50),
+    is_read BOOLEAN DEFAULT FALSE,
+    is_gift BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+  );
+
+  -- Create memory_entries table for character memories
+  CREATE TABLE IF NOT EXISTS memory_entries (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    character_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    content TEXT NOT NULL,
+    importance INTEGER DEFAULT 5,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    CONSTRAINT fk_character
+      FOREIGN KEY(character_id) 
+      REFERENCES characters(id)
+      ON DELETE CASCADE,
+    CONSTRAINT fk_user
+      FOREIGN KEY(user_id) 
+      REFERENCES users(user_id)
+      ON DELETE CASCADE
+  );
+EOSQL
+
+# Create test data if POSTGRES_SEED_DATA is true
+if [ "$POSTGRES_SEED_DATA" = "true" ]; then
+  echo "Creating test data..."
+  
+  # Create test admin user (password: admin123)
+  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    -- Only insert if user doesn't exist
+    INSERT INTO users (username, email, password_hash, name, is_admin, is_active)
+    SELECT 'admin', 'admin@example.com', crypt('admin123', gen_salt('bf')), 'Admin User', TRUE, TRUE
+    WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
+
+    -- Create test user (password: password123)
+    INSERT INTO users (username, email, password_hash, name, is_admin, is_active)
+    SELECT 'user', 'user@example.com', crypt('password123', gen_salt('bf')), 'Test User', FALSE, TRUE
+    WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'user');
+    
+    -- Create test character if none exists
+    INSERT INTO characters (id, name, age, gender, personality, background, interests)
+    SELECT 
+      '8c054f20-4a77-4eef-83e6-245d3456bdf1', 
+      'Алиса', 
+      24, 
+      'female', 
+      '["дружелюбная", "общительная", "веселая"]', 
+      'Алиса - творческая личность, которая любит путешествовать и знакомиться с новыми людьми.', 
+      '["музыка", "искусство", "путешествия"]'
+    WHERE NOT EXISTS (SELECT 1 FROM characters);
+    
+    -- Add a second character
+    INSERT INTO characters (name, age, gender, personality, background, interests)
+    SELECT 
+      'София', 
+      22, 
+      'female', 
+      '["энергичная", "амбициозная", "уверенная"]', 
+      'София - целеустремленная девушка, увлеченная саморазвитием и новыми технологиями.', 
+      '["спорт", "бизнес", "технологии"]'
+    WHERE (SELECT COUNT(*) FROM characters) < 2;
+    
+    -- Add a third character
+    INSERT INTO characters (name, age, gender, personality, background, interests)
+    SELECT 
+      'Мария', 
+      26, 
+      'female', 
+      '["умная", "спокойная", "загадочная"]', 
+      'Мария - глубокая и философски настроенная натура, интересующаяся духовным развитием.', 
+      '["чтение", "психология", "йога"]'
+    WHERE (SELECT COUNT(*) FROM characters) < 3;
+  EOSQL
+fi
+
+echo "PostgreSQL initialization completed successfully!"

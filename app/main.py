@@ -430,6 +430,43 @@ def openrouter_key_status():
         "note": "If 'is_configured' is true but 'is_working' is false, there may be an issue with the API key or model."
     }
 
+import os
+import logging
+from sqlalchemy import text
+from app.db.session import engine
+
+logger = logging.getLogger(__name__)
+
+def check_database():
+    """Check if database is properly initialized"""
+    try:
+        # Simple query to check if database is accessible
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT 1"))
+            logger.info("Database connection successful")
+            
+            # Check if users table has data
+            result = connection.execute(text("SELECT COUNT(*) FROM users"))
+            user_count = result.scalar()
+            logger.info(f"Found {user_count} users in database")
+            
+            # Check if characters table has data
+            result = connection.execute(text("SELECT COUNT(*) FROM characters"))
+            character_count = result.scalar()
+            logger.info(f"Found {character_count} characters in database")
+            
+            return True
+    except Exception as e:
+        logger.error(f"Database check failed: {e}")
+        return False
+
+# Call this function during startup
+database_ok = check_database()
+if not database_ok:
+    logger.error("Database check failed - service may not function properly")
+else:
+    logger.info("Database check passed - service is ready")
+
 if __name__ == "__main__":
     import uvicorn
     
