@@ -46,6 +46,13 @@ services:
         uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
     restart: unless-stopped
+    # Add restart delay to ensure API is fully ready
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 60s
 
   # Admin панель (Flask + Gunicorn)
   admin:
