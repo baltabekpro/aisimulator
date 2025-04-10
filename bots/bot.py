@@ -1022,34 +1022,60 @@ async def confirm_gift_handler(callback_query: types.CallbackQuery, state: FSMCo
     try:
         headers = {"Authorization": f"Bearer {API_KEY}"}
         
-        gift_endpoint = f"{API_BASE_URL}/chat/characters/{character_id}/gift"
-        alt_endpoint = f"{API_BASE_URL}/characters/{character_id}/gift"
-        debug_endpoint = f"{API_BASE_URL}/chat/characters/{character_id}/gift-alt"
+        # Define our endpoints with their corresponding payload formats
+        # Starting with the one we know works based on logs
+        endpoints_with_payloads = [
+            # Debug endpoint that works - put it first
+            {
+                "url": f"{API_BASE_URL}/chat/characters/{character_id}/gift-alt",
+                "payload": {
+                    "gift_id": selected_gift["id"],
+                    "name": selected_gift["name"],
+                    "effect": selected_gift["effect"],
+                }
+            },
+            # Primary endpoint - full details
+            {
+                "url": f"{API_BASE_URL}/chat/characters/{character_id}/gift",
+                "payload": {
+                    "gift_id": selected_gift["id"],
+                    "gift_name": selected_gift["name"],
+                    "gift_effect": selected_gift["effect"],
+                }
+            },
+            # Alternative endpoint - just gift_id
+            {
+                "url": f"{API_BASE_URL}/characters/{character_id}/gift",
+                "payload": {"gift_id": selected_gift["id"]}
+            }
+        ]
         
-        logger.debug(f"Attempting to send gift using primary endpoint: {gift_endpoint}")
+        logger.debug(f"Attempting to send gift: {selected_gift['name']}")
         
         async with aiohttp.ClientSession() as session:
-            endpoints = [gift_endpoint, alt_endpoint, debug_endpoint]
             response = None
             response_data = None
             
-            for endpoint in endpoints:
+            for endpoint_config in endpoints_with_payloads:
                 try:
-                    logger.debug(f"Trying endpoint: {endpoint}")
+                    url = endpoint_config["url"]
+                    payload = endpoint_config["payload"]
+                    logger.debug(f"Trying endpoint: {url} with payload: {payload}")
+                    
                     async with session.post(
-                        endpoint,
-                        json={"gift_id": selected_gift["id"]},
+                        url,
+                        json=payload,
                         headers=headers
                     ) as resp:
-                        if (resp.status == 200):
+                        if resp.status == 200:
                             response = resp
                             response_data = await resp.json()
-                            logger.info(f"Gift sent successfully using {endpoint}")
+                            logger.info(f"Gift sent successfully using {url}")
                             break
                         else:
-                            logger.warning(f"Endpoint {endpoint} returned status {resp.status}")
+                            logger.warning(f"Endpoint {url} returned status {resp.status}")
                 except Exception as e:
-                    logger.error(f"Error with endpoint {endpoint}: {e}")
+                    logger.error(f"Error with endpoint {url}: {e}")
                     continue
             
             if not response or not response_data:
@@ -1059,52 +1085,90 @@ async def confirm_gift_handler(callback_query: types.CallbackQuery, state: FSMCo
                 )
                 return
                 
-            reaction_text = "Спасибо за подарок!"
-            
+            # Check for valid AI reaction
             reaction = response_data.get("reaction", {})
-            if (isinstance(reaction, dict) and "text" in reaction):
+            
+            # Process AI reaction
+            if isinstance(reaction, dict) and "text" in reaction and reaction["text"].strip():
                 reaction_text = reaction["text"]
-            elif (isinstance(reaction, str)):
+            elif isinstance(reaction, str) and reaction.strip():
                 reaction_text = reaction
-            
-            logger.debug(f"Parsed reaction text: {reaction_text}")
-            
-            relationship_changes = response_data.get("relationship_changes", {})
-            
-            gift_effect_message = (
-                f"✨✨✨ ПОДАРОК ОТПРАВЛЕН! ✨✨✨\n\n"
-                f"🎁 Вы подарили {character['name']} {selected_gift['name']}\n\n"
-                f"💌 Реакция: {reaction_text}\n\n"
-            )
-            
-            if (relationship_changes):
-                general_change = relationship_changes.get("general", 0)
-                friendship = relationship_changes.get("friendship", 0)
-                romance = relationship_changes.get("romance", 0)
-                trust = relationship_changes.get("trust", 0)
+            else:
+                # No valid reaction - make explicit request for AI reaction
+                logger.warning("No valid reaction in response, requesting explicit AI reaction")
                 
-                gift_effect_message += "❤️ Изменения в отношениях:\n"
-                if (general_change):
-                    gift_effect_message += f"• Общее: {'+'if general_change > 0 else ''}{general_change}\n"
-                if (friendship):
-                    gift_effect_message += f"• Дружба: {'+'if friendship > 0 else ''}{friendship}\n"
-                if (romance):
-                    gift_effect_message += f"• Симпатия: {'+'if romance > 0 else ''}{romance}\n"
-                if (trust):
-                    gift_effect_message += f"• Доверие: {'+'if trust > 0 else ''}{trust}\n"
+                # Try to save gift as a memory directly through the chat message endpoint
+                # instead of the memory endpoint which is having auth issues
+                try:
+                    # Use a simpler approach - send a message that tells the AI about the gift
+                    chat_endpoint = f"{API_BASE_URL}/chat/characters/{character_id}/message"
+                    
+                    # Create special gift system message to ensure the AI knows about it
+                    gift_context_message = {
+                        "message": f"SYSTEM: Пользователь подарил тебе {selected_gift['name']}. Это важное событие, которое нужно запомнить.",
+                        "is_system": True  # Mark as system message if API supports it
+                    }
+                    
+                    # Try to send this as a system message first to register the gift
+                    try:
+                        async with session.post(
+                            chat_endpoint,
+                            json=gift_context_message,
+                            headers=headers
+                        ) as sys_resp:
+                            if sys_resp.status == 200:
+                                logger.info("Successfully sent gift system message")
+                    except Exception as e:
+                        logger.error(f"Error sending gift system message: {e}")
+                    
+                    # Now prompt the AI to react to the gift with a more detailed message
+                    gift_prompt_message = {
+                        "message": f"Я только что подарил(а) тебе {selected_gift['name']}. Как тебе такой подарок? Пожалуйста, опиши свою реакцию."
+                    }
+                    
+                    async with session.post(
+                        chat_endpoint,
+                        json=gift_prompt_message,
+                        headers=headers
+                    ) as chat_resp:
+                        if chat_resp.status == 200:
+                            chat_data = await chat_resp.json()
+                            if isinstance(chat_data, dict) and "response" in chat_data and chat_data["response"]:
+                                reaction_text = chat_data["response"]
+                                logger.info(f"Got explicit AI reaction via chat: {reaction_text[:50]}...")
+                            elif isinstance(chat_data, dict) and "messages" in chat_data and chat_data["messages"]:
+                                # Try to find AI response in messages array
+                                for msg in reversed(chat_data["messages"]):
+                                    if msg.get("sender_type") == "ai" and "content" in msg:
+                                        reaction_text = msg["content"]
+                                        logger.info(f"Found AI reaction in messages: {reaction_text[:50]}...")
+                                        break
+                            else:
+                                # Final fallback to a personalized message with specific gift name
+                                reaction_text = f"*смотрит на {selected_gift['name']} с восхищением* Ого! Это... для меня? Большое спасибо, это так неожиданно и приятно!"
+                                logger.warning("Using personalized fallback reaction - no valid response format")
+                        else:
+                            logger.warning(f"Chat endpoint returned status {chat_resp.status}")
+                            # Use personalized fallback with specific gift name
+                            reaction_text = f"Спасибо за {selected_gift['name']}! Это так мило с твоей стороны."
+                except Exception as e:
+                    logger.exception(f"Error getting explicit AI reaction: {e}")
+                    reaction_text = f"*с улыбкой принимает {selected_gift['name']}* Спасибо большое! Мне очень приятно."
             
-            await callback_query.message.delete()
-            sent_message = await callback_query.message.answer("🎁 Отправка подарка...")
-            await asyncio.sleep(1)
-            await sent_message.delete()
+            logger.info(f"Final reaction text: {reaction_text[:100]}...")
             
-            await callback_query.message.answer(
-                gift_effect_message,
-                reply_markup=get_main_menu_keyboard()
+            # Send final response to user with gift confirmation and AI reaction
+            await callback_query.message.edit_text(
+                f"✨ Подарок успешно отправлен!\n\n"
+                f"🎁 {selected_gift['name']}\n"
+                f"❤️ +{selected_gift['effect']} к отношениям\n\n"
+                f"*Реакция {character['name']}*:\n{reaction_text}",
+                parse_mode="Markdown"
             )
             
+            # Return to chatting state
             await state.set_state(BotStates.chatting)
-            
+    
     except Exception as e:
         logger.exception(f"Error sending gift: {e}")
         await callback_query.message.edit_text(

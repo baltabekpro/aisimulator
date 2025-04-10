@@ -5,7 +5,8 @@ services:
     container_name: aibot-postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh
+      # Use a more resilient approach for init script
+      - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh:ro
     environment:
       - POSTGRES_USER=aibot
       - POSTGRES_PASSWORD=postgres
@@ -38,10 +39,10 @@ services:
       - DEBUG=True
     ports:
       - "8000:8000"  # Публичный порт API
+    # Use a simpler approach to avoid script execution issues
     command: >
       bash -c "
-        chmod +x /app/scripts/fix-api.sh &&
-        /app/scripts/fix-api.sh &&
+        echo 'Starting API server...' &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
     restart: unless-stopped
@@ -66,10 +67,11 @@ services:
       - ADMIN_PASSWORD=admin_password
     ports:
       - "5000:5000"  # Публичный порт админ-панели
+    # Use direct startup to avoid script execution issues
     command: >
       bash -c "
-        chmod +x /app/scripts/docker-entrypoint.sh &&
-        /app/scripts/docker-entrypoint.sh
+        echo 'Starting Admin Panel...' &&
+        python -m admin_panel.app
       "
     restart: unless-stopped
 
@@ -91,10 +93,10 @@ services:
     environment:
       - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
       - API_BASE_URL=http://api:8000/api/v1
+    # Use direct startup to avoid script execution issues
     command: >
       bash -c "
-        chmod +x /app/scripts/fix-telegram.sh &&
-        /app/scripts/fix-telegram.sh &&
+        echo 'Starting Telegram Bot...' &&
         python -m bots.bot
       "
     restart: unless-stopped

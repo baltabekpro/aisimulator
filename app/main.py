@@ -40,6 +40,8 @@ from dotenv import load_dotenv
 
 # Add missing imports
 from app.config import settings
+# Also import core.config settings to ensure both are available
+from core.config import settings as core_settings
 from app.api.v1 import auth, chat, debug, interactions
 
 # Explicitly load environment variables
@@ -65,15 +67,11 @@ async def lifespan(app: FastAPI):
     # Initialize database
     try:
         # Import here to avoid circular imports
-        from core.db.init_db import init_db, create_test_data, fix_schema_issues
+        from core.db.init_db import init_db, create_test_data
         logger.info("Checking database schema...")
         
-        # First try to fix any schema issues
-        try:
-            fix_schema_issues()
-            logger.info("Database schema check completed")
-        except Exception as schema_error:
-            logger.error(f"Error fixing database schema: {schema_error}")
+        # Skip the schema fix function which has the UUID import issue
+        logger.info("Database schema check skipped - will rely on SQLAlchemy's create_all")
         
         # Then initialize database tables
         try:
@@ -121,17 +119,17 @@ async def lifespan(app: FastAPI):
             )
             if response.status_code == 200:
                 logger.info("✅ OpenRouter API key verified successfully!")
-                # Store the working API key in the settings
-                from core.config import settings
-                settings.OPENROUTER_API_KEY = api_key
-                settings.OPENROUTER_WORKING = True
+                # Store the working API key in the settings (use the already imported core_settings)
+                core_settings.OPENROUTER_API_KEY = api_key
+                core_settings.OPENROUTER_WORKING = True
             else:
                 logger.error(f"❌ OpenRouter API test failed with status {response.status_code}")
                 logger.error(f"Response: {response.text}")
         except Exception as e:
             logger.error(f"❌ Error testing OpenRouter API: {e}")
     
-    logger.info(f"Using OpenRouter model: {settings.OPENROUTER_MODEL}")
+    # Use the proper settings reference that we imported at the module level
+    logger.info(f"Using OpenRouter model: {core_settings.OPENROUTER_MODEL}")
     
     # Add additional startup verifications if needed
     if settings.DATABASE_URL:

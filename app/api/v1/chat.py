@@ -484,44 +484,6 @@ async def send_message(
     relationship_changes = {"general": 0}
     
     if isinstance(response, dict):
-        if "events" in response:
-            events_data = response.pop("events")
-            if events_data:
-                try:
-                    events_record = db.query(Event).filter(
-                        Event.character_id == character_id,
-                        Event.event_type == 'events'
-                    ).first()
-                    if events_record:
-                        try:
-                            current_events = json.loads(events_record.data) if events_record.data else []
-                            if isinstance(events_data, list):
-                                current_events.extend(events_data)
-                            else:
-                                current_events.append(events_data)
-                            events_record.data = json.dumps(current_events)
-                            logger.info(f"Updated existing events record with new data")
-                        except json.JSONDecodeError:
-                            events_data_list = events_data if isinstance(events_data, list) else [events_data]
-                            events_record.data = json.dumps(events_data_list)
-                            logger.info(f"Replaced invalid events data with new events")
-                    else:
-                        from datetime import datetime
-                        events_data_list = events_data if isinstance(events_data, list) else [events_data] 
-                        new_event = Event(
-                            character_id=character_id,
-                            event_type='events',
-                            data=json.dumps(events_data_list),
-                            created_at=datetime.now()
-                        )
-                        db.add(new_event)
-                        logger.info(f"Created new events record for character {character_id}")
-                    db.commit()
-                except Exception as db_error:
-                    logger.error(f"Error saving events to database directly: {db_error}")
-                    db.rollback()
-                except Exception as events_error:
-                    logger.error(f"Error processing events data: {events_error}")
         if "messages" in response and isinstance(response["messages"], list) and response["messages"]:
             is_multi_message = True
             multi_messages = response["messages"]
@@ -686,28 +648,121 @@ async def send_gift(
         }
     }
     
-    # Create gift context
+    # Create gift context with more detailed information to influence the AI's responses
     gift_context = {
         "character": character_info,
         "relationship": {"stage": "acquaintance", "score": 50},
         "history": message_history,
         "events": {"has_events": False},
-        "gift": {
-            "id": gift_id,
-            "name": gift["name"],
-            "effect": gift["effect"]
-        }
+        "current_interaction": {
+            "type": "gift_received",
+            "gift": {
+                "id": gift_id,
+                "name": gift["name"],
+                "effect": gift["effect"],
+                "timestamp": datetime.now().isoformat()
+            }
+        },
+        "system_instruction": f"Пользователь только что подарил тебе подарок: {gift['name']}. " +
+                             "Учти этот подарок в своей памяти. Это важное событие в вашей истории общения. " +
+                             "Ты можешь упоминать этот подарок в будущих беседах."
     }
     
-    # Generate personalized response using the AI
-    prompt = f"Пользователь отправил тебе подарок: {gift['name']}. Как ты отреагируешь? Опиши свою реакцию, эмоции и впечатления от подарка."
+    # Try to load existing gifts history to add context
+    try:
+        gifts_event = db.query(Event).filter(
+            Event.character_id == character_id,
+            Event.event_type == 'gifts'
+        ).first()
+        
+        if gifts_event and gifts_event.data:
+            try:
+                past_gifts = json.loads(gifts_event.data)
+                gift_context["past_gifts"] = past_gifts
+                gift_context["events"]["has_events"] = True
+                logger.info(f"Loaded {len(past_gifts)} past gifts for context")
+            except json.JSONDecodeError:
+                logger.error("Could not parse past gifts data")
+    except Exception as e:
+        logger.error(f"Error loading gift history: {e}")
+    
+    # Generate personalized response using the AI with enhanced gift information
+    prompt = f"""Пользователь только что подарил тебе {gift['name']}. 
+
+ВАЖНОЕ СОБЫТИЕ: Тебе подарили подарок! Этот подарок часть вашей истории общения.
+
+Как ты отреагируешь на получение этого подарка? Опиши свою искреннюю реакцию, эмоции и впечатления. 
+Твой ответ должен быть эмоциональным и соответствовать твоей личности.
+Не используй общие фразы вроде "Спасибо за подарок". Опиши свои настоящие чувства.
+
+В будущих разговорах вспоминай об этом подарке, когда это уместно - это важная часть ваших отношений."""
+
+    # Add memory entry specifically for the gift
+    try:
+        from core.db.models import MemoryEntry
+        
+        # Create a memory entry for the gift
+        gift_memory = MemoryEntry(
+            id=uuid4(),
+            character_id=character_id,
+            user_id=current_user.user_id if current_user else None,
+            memory_type="gift",
+            category="interaction",
+            content=f"Пользователь подарил {gift['name']}. Это было очень приятно.",
+            importance=8,  # Higher importance to make sure it's remembered
+            is_active=True,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        db.add(gift_memory)
+        db.commit()
+        logger.info(f"Created memory entry for gift: {gift['name']}")
+    except Exception as e:
+        logger.error(f"Error creating gift memory: {e}")
+        db.rollback()
     
     # Let the AI generate a personalized response
+    logger.info(f"Requesting AI response for gift: {gift['name']}")
     response = ai_client.generate_response(gift_context, prompt)
+    logger.info(f"Received AI response type: {type(response)}")
     
     # Extract text and emotion from the response
     if isinstance(response, dict):
-        reaction_text = response.get("text", f"Спасибо за {gift['name']}!")
+        logger.info(f"AI response keys: {response.keys()}")
+        reaction_text = response.get("text")
+        # Log the reaction text to help with debugging
+        if reaction_text:
+            logger.info(f"AI generated gift reaction: {reaction_text[:100]}...")
+        else:
+            logger.warning("AI did not generate reaction text - requesting another response")
+            
+            # If AI didn't generate valid text, retry with more explicit prompt
+            retry_prompt = f"""Пользователь подарил тебе {gift['name']}. 
+            
+ВАЖНО: Нужна твоя эмоциональная и искренняя реакция на этот подарок!
+Опиши свои чувства и впечатления подробно, как будто ты действительно только что получил(а) этот подарок.
+Не используй шаблонных фраз. Реакция должна соответствовать твоему характеру."""
+
+            # Retry AI call
+            logger.info("Retrying AI request for gift reaction")
+            retry_response = ai_client.generate_response(gift_context, retry_prompt)
+            if isinstance(retry_response, dict) and retry_response.get("text"):
+                reaction_text = retry_response.get("text")
+                logger.info(f"Retry generated reaction: {reaction_text[:100]}...")
+                # Also update emotion and relationship changes if available
+                if "emotion" in retry_response:
+                    response["emotion"] = retry_response["emotion"]
+                if "relationship_changes" in retry_response:
+                    response["relationship_changes"] = retry_response["relationship_changes"]
+            elif isinstance(retry_response, str) and len(retry_response.strip()) > 10:
+                reaction_text = retry_response
+                logger.info(f"Retry generated string reaction: {reaction_text[:100]}...")
+            else:
+                # If still no valid response, create minimal response without templates
+                logger.error("Failed to generate AI reaction even after retry")
+                reaction_text = f"*реагирует на подарок* Это... {gift['name']}... Мне очень приятно."
+                logger.warning(f"Using minimal generic response: {reaction_text}")
+        
         emotion = response.get("emotion", "happy")
         relationship_changes = response.get("relationship_changes", {
             "general": gift["effect"] * 0.01,
@@ -716,14 +771,53 @@ async def send_gift(
             "trust": gift["effect"] * 0.01 * 0.5
         })
     else:
-        reaction_text = str(response)
-        emotion = "happy"
-        relationship_changes = {
-            "general": gift["effect"] * 0.01,
-            "friendship": gift["effect"] * 0.01 * 0.7,
-            "romance": gift["effect"] * 0.01 * 0.3,
-            "trust": gift["effect"] * 0.01 * 0.5
-        }
+        # If response is not a dict, try to use it as text directly
+        if response and isinstance(response, str) and len(response.strip()) > 10:
+            reaction_text = response
+            logger.info(f"Using string response directly: {reaction_text[:50]}...")
+        else:
+            # If no valid response, make another request with more explicit prompt
+            logger.warning("Invalid direct response - requesting new AI response")
+            
+            retry_prompt = f"""Я только что получил(а) подарок: {gift['name']}! 
+            
+Как персонаж, опиши свою реакцию на получение этого подарка.
+Будь эмоциональным и искренним. Опиши, что ты чувствуешь, получив такой подарок."""
+
+            # Retry with explicit prompt
+            retry_response = ai_client.generate_response(gift_context, retry_prompt)
+            if isinstance(retry_response, dict) and retry_response.get("text"):
+                reaction_text = retry_response.get("text")
+                logger.info(f"Fallback AI generated reaction: {reaction_text[:100]}...")
+                # Get emotion if available
+                emotion = retry_response.get("emotion", "happy")
+                relationship_changes = retry_response.get("relationship_changes", {
+                    "general": gift["effect"] * 0.01,
+                    "friendship": gift["effect"] * 0.01 * 0.7,
+                    "romance": gift["effect"] * 0.01 * 0.3,
+                    "trust": gift["effect"] * 0.01 * 0.5
+                })
+            elif isinstance(retry_response, str) and len(retry_response.strip()) > 10:
+                reaction_text = retry_response
+                emotion = "happy" 
+                relationship_changes = {
+                    "general": gift["effect"] * 0.01,
+                    "friendship": gift["effect"] * 0.01 * 0.7,
+                    "romance": gift["effect"] * 0.01 * 0.3,
+                    "trust": gift["effect"] * 0.01 * 0.5
+                }
+                logger.info(f"Fallback string reaction: {reaction_text[:100]}...")
+            else:
+                # Last resort minimal response
+                reaction_text = f"Спасибо за подарок! Это именно то, что мне нравится."
+                emotion = "happy"
+                relationship_changes = {
+                    "general": gift["effect"] * 0.01,
+                    "friendship": gift["effect"] * 0.01 * 0.7,
+                    "romance": gift["effect"] * 0.01 * 0.3,
+                    "trust": gift["effect"] * 0.01 * 0.5
+                }
+                logger.error("Failed all attempts to generate AI reaction")
 
     # Save messages to database
     if current_user:
@@ -763,12 +857,15 @@ async def send_gift(
                 ChatHistory.user_id == current_user.user_id
             ).scalar() or 0
             
-            # Create gift event entry
+            # Create gift event entry with more detailed information
             gift_event = {
+                "event_type": "gift_received",
                 "gift_id": gift_id,
                 "gift_name": gift["name"],
                 "gift_effect": gift["effect"],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "reaction": reaction_text,
+                "emotion": emotion
             }
             
             # Store gift event in chat history
@@ -839,7 +936,14 @@ async def send_gift(
             "text": reaction_text,
             "emotion": emotion
         },
-        "relationship_changes": relationship_changes
+        "relationship_changes": relationship_changes,
+        "gift": {
+            "id": gift_id,
+            "name": gift["name"],
+            "effect": gift["effect"]
+        },
+        "is_ai_response": True,
+        "character_name": character.name
     }
 
 @router.post("/characters/{character_id}/clear-history")
@@ -1192,7 +1296,7 @@ def create_character_memory(
         raise HTTPException(status_code=404, detail="Character not found")
     
     # Create a new memory
-    memory_id = str(uuid.uuid4())
+    memory_id = str(uuid4())
     timestamp = datetime.now().isoformat()
     
     db.execute(text("""

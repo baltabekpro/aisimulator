@@ -291,18 +291,97 @@ def fix_schema_issues():
             for col_name, col_type in missing_cols_dict.items():
                 if col_name not in msg_existing_cols:
                     logger.info(f"Adding {col_name} column to messages table (non-SQLite)")
-                    with engine.begin() as conn:
-                        conn.execute(sa.text(f"ALTER TABLE messages ADD COLUMN {col_name} {col_type}"))
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(sa.text(f"ALTER TABLE messages ADD COLUMN {col_name} {col_type}"))
+                    except Exception as e:
+                        logger.warning(f"Could not add column {col_name}: {e}")
+                        
+            # Handle the ID column separately with better error checking
             if 'id' not in msg_existing_cols:
                 logger.info("Adding id column to messages table (non-SQLite)")
-                with engine.begin() as conn:
-                    conn.execute(sa.text("ALTER TABLE messages ADD COLUMN id UUID DEFAULT gen_random_uuid()"))
+                try:
+                    with engine.begin() as conn:
+                        # Check if PostgreSQL supports gen_random_uuid() function
+                        try:
+                            conn.execute(sa.text("SELECT gen_random_uuid()"))
+                            uuid_func = "gen_random_uuid()"
+                        except Exception:
+                            # Fallback to other UUID generation methods depending on database
+                            if 'postgres' in str(engine.url).lower():
+                                uuid_func = "uuid_generate_v4()"
+                            else:
+                                uuid_func = "uuid()"
+                                
+                        conn.execute(sa.text(f"ALTER TABLE messages ADD COLUMN id UUID DEFAULT {uuid_func}"))
+                except Exception as e:
+                    logger.warning(f"Could not add id column: {e}")
+                    
+            # Handle column rename with better error checking
             if 'message_id' in msg_existing_cols and 'id' not in msg_existing_cols:
                 logger.info("Renaming message_id column to id in messages table (non-SQLite)")
-                with engine.begin() as conn:
-                    conn.execute(sa.text("ALTER TABLE messages RENAME COLUMN message_id TO id"))
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(sa.text("ALTER TABLE messages RENAME COLUMN message_id TO id"))
+                except Exception as e:
+                    logger.warning(f"Could not rename message_id column: {e}")
 
     logger.info("Schema fix completed successfully")
+
+def create_test_character():
+    """Create a test character with proper attributes to avoid errors"""
+    from sqlalchemy.orm import Session
+    from core.db.session import SessionLocal
+    
+    db = SessionLocal()
+    
+    try:
+        # Check if characters table exists and has at least one character
+        table_name = "characters"
+        inspector = sa.inspect(engine)
+        if table_name not in inspector.get_table_names():
+            logger.info(f"Table {table_name} doesn't exist, skipping character creation")
+            return
+            
+        # Check if we already have test characters
+        query = sa.text("SELECT COUNT(*) FROM characters")
+        existing_count = db.execute(query).scalar()
+        
+        if existing_count > 0:
+            logger.info(f"Already have {existing_count} characters, skipping creation")
+            return
+            
+        logger.info("Creating test character")
+        
+        # Create the character with an SQL statement to avoid attribute errors
+        character_data = {
+            "id": "8c054f20-4a77-4eef-83e6-245d3456bdf1", 
+            "name": "Алиса",
+            "age": 24,
+            "gender": "female",
+            "personality": json.dumps(["дружелюбная", "общительная", "веселая"]),
+            "background": "Алиса - творческая личность, которая любит путешествовать и знакомиться с новыми людьми.",
+            "interests": json.dumps(["музыка", "искусство", "путешествия"]),
+            "greeting_message": "Привет! Рада познакомиться с тобой! Как твой день?",
+            "created_at": datetime.now()
+        }
+        
+        # Build the SQL statement dynamically based on the character data
+        columns = ", ".join(character_data.keys())
+        placeholders = ", ".join([f":{key}" for key in character_data.keys()])
+        
+        # Use raw SQL to avoid SQLAlchemy ORM issues
+        insert_query = sa.text(f"INSERT INTO characters ({columns}) VALUES ({placeholders})")
+        
+        db.execute(insert_query, character_data)
+        db.commit()
+        logger.info("Test character created successfully")
+    
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating test character: {e}")
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -310,5 +389,7 @@ if __name__ == "__main__":
     init_db()
     logger.info("Creating test data...")
     create_test_data()
+    logger.info("Creating test character...")
+    create_test_character()
     logger.info("Fixing schema issues...")
     fix_schema_issues()

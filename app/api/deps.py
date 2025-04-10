@@ -114,7 +114,7 @@ def get_current_user(
             
         return user
         
-    except (jwt.JWTError, ValidationError):
+    except (jwt.exceptions.DecodeError, jwt.exceptions.InvalidTokenError, ValidationError) as e:
         # For development, return a test user if DEBUG mode is enabled
         if settings.debug:
             return SimpleNamespace(
@@ -127,7 +127,7 @@ def get_current_user(
         
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail=f"Could not validate credentials: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
