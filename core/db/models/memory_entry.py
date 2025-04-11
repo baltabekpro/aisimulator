@@ -9,8 +9,12 @@ class MemoryEntry(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     character_id = Column(String, nullable=False)
     user_id = Column(String, nullable=False)
+    type = Column(String(50), default="unknown")
+    memory_type = Column(String(50), default="unknown")
+    category = Column(String(50), default="general")
     content = Column(Text, nullable=False)
     importance = Column(Integer, default=1)  # 1-10 scale
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
     

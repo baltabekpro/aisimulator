@@ -20,6 +20,10 @@ class UserService(BaseService):
         """Get a user by username."""
         return self.db.query(User).filter(User.username == username).first()
     
+    def get_by_external_id(self, external_id: str) -> Optional[User]:
+        """Get a user by external_id (используется для OAuth авторизации)."""
+        return self.db.query(User).filter(User.external_id == external_id).first()
+    
     def search_users(self, query: str, skip: int = 0, limit: int = 10) -> List[User]:
         """Search users by username or email."""
         return self.db.query(User).filter(

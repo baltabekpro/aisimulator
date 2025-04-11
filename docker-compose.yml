@@ -24,6 +24,29 @@ services:
     # Remove the chmod command that was causing errors
     # Use the official entrypoint directly
 
+  # Сервис инициализации и исправления базы данных
+  db-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: aibot-db-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://aibot:postgres@postgres:5432/aibot?client_encoding=utf8
+    command: >
+      bash -c "
+        echo 'Инициализация базы данных и применение исправлений...' &&
+        python scripts/auto_prepare_db.py &&
+        python initialize_database.py
+      "
+    restart: "no"
+
   # API сервер (FastAPI + Uvicorn)
   api:
     build:
@@ -31,8 +54,8 @@ services:
       dockerfile: Dockerfile.api
     container_name: aibot-api
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
     env_file:
@@ -65,8 +88,8 @@ services:
       dockerfile: Dockerfile.admin
     container_name: aibot-admin
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
     env_file:
@@ -93,8 +116,8 @@ services:
       dockerfile: Dockerfile.bot
     container_name: aibot-telegram
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       api:
         condition: service_started
     volumes:

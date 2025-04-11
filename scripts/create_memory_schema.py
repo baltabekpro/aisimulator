@@ -52,6 +52,7 @@ def create_memory_schema():
                             id VARCHAR(36) PRIMARY KEY,
                             character_id VARCHAR(36) NOT NULL,
                             user_id VARCHAR(36) NOT NULL,
+                            type VARCHAR(50) NOT NULL DEFAULT 'unknown',
                             memory_type VARCHAR(50) NOT NULL DEFAULT 'unknown',
                             category VARCHAR(50) NOT NULL DEFAULT 'general',
                             content TEXT NOT NULL,
@@ -62,6 +63,51 @@ def create_memory_schema():
                         )
                     """))
                     logger.info("✅ Created memory_entries table")
+                    
+                    # Create triggers to keep type and memory_type in sync
+                    is_postgres = 'postgresql' in db_url.lower()
+                    
+                    if is_postgres:
+                        logger.info("Creating sync triggers for PostgreSQL")
+                        # Create trigger functions to sync columns
+                        conn.execute(text("""
+                            CREATE OR REPLACE FUNCTION sync_memory_type_to_type()
+                            RETURNS TRIGGER AS $$
+                            BEGIN
+                                NEW.type = NEW.memory_type;
+                                RETURN NEW;
+                            END;
+                            $$ LANGUAGE plpgsql;
+                        """))
+                        
+                        conn.execute(text("""
+                            CREATE OR REPLACE FUNCTION sync_type_to_memory_type()
+                            RETURNS TRIGGER AS $$
+                            BEGIN
+                                NEW.memory_type = NEW.type;
+                                RETURN NEW;
+                            END;
+                            $$ LANGUAGE plpgsql;
+                        """))
+                        
+                        # Create triggers
+                        conn.execute(text("""
+                            CREATE TRIGGER sync_memory_type_trigger
+                            BEFORE INSERT OR UPDATE OF memory_type ON memory_entries
+                            FOR EACH ROW
+                            WHEN (NEW.memory_type IS DISTINCT FROM NEW.type)
+                            EXECUTE FUNCTION sync_memory_type_to_type();
+                        """))
+                        
+                        conn.execute(text("""
+                            CREATE TRIGGER sync_type_trigger
+                            BEFORE INSERT OR UPDATE OF type ON memory_entries
+                            FOR EACH ROW
+                            WHEN (NEW.type IS DISTINCT FROM NEW.memory_type)
+                            EXECUTE FUNCTION sync_type_to_memory_type();
+                        """))
+                        
+                        logger.info("✅ Created column sync triggers")
                 else:
                     # Table exists, check for missing columns
                     logger.info("memory_entries table exists, checking columns")
@@ -74,6 +120,7 @@ def create_memory_schema():
                     
                     # Check for missing columns
                     required_columns = {
+                        'type': 'VARCHAR(50) DEFAULT \'unknown\'',
                         'memory_type': 'VARCHAR(50) DEFAULT \'unknown\'',
                         'category': 'VARCHAR(50) DEFAULT \'general\'',
                         'content': 'TEXT NOT NULL',
@@ -85,6 +132,17 @@ def create_memory_schema():
                         if col_name.lower() not in [c.lower() for c in column_names]:
                             logger.info(f"Adding missing column '{col_name}' to memory_entries table")
                             conn.execute(text(f"ALTER TABLE memory_entries ADD COLUMN {col_name} {col_def}"))
+                    
+                    # If only one of type/memory_type exists, sync the data between them
+                    has_type = 'type' in [c.lower() for c in column_names]
+                    has_memory_type = 'memory_type' in [c.lower() for c in column_names]
+                    
+                    if has_type and not has_memory_type:
+                        logger.info("Synchronizing data from type to memory_type")
+                        conn.execute(text("UPDATE memory_entries SET memory_type = type"))
+                    elif has_memory_type and not has_type:
+                        logger.info("Synchronizing data from memory_type to type")
+                        conn.execute(text("UPDATE memory_entries SET type = memory_type"))
             except Exception as e:
                 logger.error(f"Error creating memory_entries table: {e}")
         
@@ -118,11 +176,9 @@ def create_memory_schema():
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_memory_entries_character_id ON memory_entries(character_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_memory_entries_user_id ON memory_entries(user_id)"))
                 
-                # Create memory_type column if it exists
-                if 'memory_type' in [col[0].lower() for col in conn.execute(text(
-                    "SELECT column_name FROM information_schema.columns WHERE table_name = 'memory_entries'"
-                )).fetchall()]:
-                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_memory_entries_type ON memory_entries(memory_type)"))
+                # Create indexes for type columns
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_memory_entries_type ON memory_entries(type)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_memory_entries_memory_type ON memory_entries(memory_type)"))
                 
                 # Create category column if it exists
                 if 'category' in [col[0].lower() for col in conn.execute(text(

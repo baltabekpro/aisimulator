@@ -13,6 +13,10 @@ router = APIRouter()
 class LikeRequest(BaseModel):
     character_id: str = Field(..., description="ID of the character to like/dislike")
 
+# Добавленная модель для списка интересов
+class InterestsList(BaseModel):
+    interests: List[str] = Field(..., description="Available interests for users to select")
+
 class InteractionResponse(BaseModel):
     success: bool
     message: str
@@ -320,3 +324,21 @@ async def send_gift(
         message=f"Successfully sent gift {gift_id} to character {character_id}",
         match=False
     )
+
+# Добавляем новый эндпоинт для получения списка интересов
+@router.get("/interests", response_model=InterestsList)
+async def get_available_interests(
+    current_user = Depends(get_current_user)
+):
+    """Получить список доступных интересов для выбора пользователем"""
+    # В реальной реализации эти данные должны храниться в базе данных
+    # Для демонстрации возвращаем захардкоженный список
+    interests = [
+        "музыка", "кино", "книги", "искусство", "путешествия", 
+        "спорт", "фитнес", "кулинария", "фотография", "танцы", 
+        "технологии", "языки", "наука", "психология", "мода",
+        "настольные игры", "видеоигры", "животные", "природа", 
+        "йога", "медитация", "волонтерство", "садоводство"
+    ]
+    
+    return InterestsList(interests=interests)

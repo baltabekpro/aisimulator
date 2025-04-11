@@ -9,6 +9,9 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+# Import our universal ID handler
+from core.utils.universal_id import ensure_uuid, get_user_id_formats
+
 logger = logging.getLogger(__name__)
 
 class MemoryManager:
@@ -372,7 +375,7 @@ class MemoryManager:
         """
         try:
             match_index = text.lower().find(match.lower())
-            if match_index >= 0:
+            if (match_index >= 0):
                 start_index = max(0, match_index - 20)
                 end_index = min(len(text), match_index + len(match) + 40)
                 return text[start_index:end_index].strip()
@@ -705,7 +708,7 @@ class MemoryManager:
                         "id": memory_id,
                         "character_id": character_id_str,
                         "user_id": user_id_str,
-                        "memory_type": memory_type,
+                        "memory_type": memory.get("type", "unknown"),  # Use "type" from the memory object but save as "memory_type"
                         "category": category,
                         "content": memory_content,
                         "importance": importance,
@@ -784,22 +787,82 @@ class MemoryManager:
             from core.utils.db_helpers import reset_db_connection, execute_safe_query
             reset_db_connection(db_session)
             
-            # First try the memory_entries table using execute_safe_query
-            memory_entries = execute_safe_query(db_session, """
-                SELECT memory_type, category, content, importance, is_active 
-                FROM memory_entries
-                WHERE character_id::text = :character_id
-                AND (is_active IS NULL OR is_active = TRUE)
-                ORDER BY importance DESC, created_at DESC
-            """, {"character_id": character_id_str}).fetchall()
+            # Try to query memory_entries table, checking for both column names
+            # First check if we have a memory_type column
+            try:
+                columns_result = execute_safe_query(db_session, """
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'memory_entries'
+                    AND column_name IN ('type', 'memory_type')
+                """).fetchall()
+                
+                column_names = [col[0] for col in columns_result]
+                
+                has_type = 'type' in column_names
+                has_memory_type = 'memory_type' in column_names
+                
+                # Dynamically build the query based on available columns
+                column_to_use = None
+                if has_memory_type:
+                    column_to_use = 'memory_type'
+                elif has_type:
+                    column_to_use = 'type'
+                    
+                if column_to_use:
+                    self.logger.info(f"Using '{column_to_use}' column to load memories")
+                    
+                    memory_entries = execute_safe_query(db_session, f"""
+                        SELECT {column_to_use}, content, importance, is_active 
+                        FROM memory_entries
+                        WHERE character_id::text = :character_id
+                        AND (is_active IS NULL OR is_active = TRUE)
+                        ORDER BY importance DESC, created_at DESC
+                    """, {"character_id": character_id_str}).fetchall()
+                else:
+                    # Try a more generic approach if neither column is found
+                    self.logger.warning("Neither 'type' nor 'memory_type' column found, using fallback query")
+                    memory_entries = execute_safe_query(db_session, """
+                        SELECT content, importance, is_active 
+                        FROM memory_entries
+                        WHERE character_id::text = :character_id
+                        AND (is_active IS NULL OR is_active = TRUE)
+                        ORDER BY importance DESC, created_at DESC
+                    """, {"character_id": character_id_str}).fetchall()
+            except Exception as schema_err:
+                self.logger.error(f"Error checking schema: {schema_err}")
+                # Fallback to using memory_entries_view if available
+                try:
+                    memory_entries = execute_safe_query(db_session, """
+                        SELECT memory_type, content, importance, is_active 
+                        FROM memory_entries_view
+                        WHERE character_id::text = :character_id
+                        AND (is_active IS NULL OR is_active = TRUE)
+                        ORDER BY importance DESC, created_at DESC
+                    """, {"character_id": character_id_str}).fetchall()
+                except Exception:
+                    memory_entries = []
+                    self.logger.error(f"Failed to use memory_entries_view fallback: {schema_err}")
             
             if memory_entries:
                 for entry in memory_entries:
-                    memory_type = entry[0] if entry[0] else "unknown"
-                    category = entry[1] if entry[1] else "general"
-                    content = entry[2]
-                    importance = entry[3] if entry[3] is not None else 5
-                    is_active = entry[4] if len(entry) > 4 and entry[4] is not None else True
+                    # Handle either query format
+                    if len(entry) >= 4:  # We have type, content, importance, is_active
+                        memory_type = entry[0] if entry[0] else "unknown"
+                        content = entry[1]
+                        importance = entry[2] if entry[2] is not None else 5
+                        is_active = entry[3] if entry[3] is not None else True
+                    elif len(entry) >= 3:  # We have content, importance, is_active (no type)
+                        memory_type = "unknown"
+                        content = entry[0]
+                        importance = entry[1] if entry[1] is not None else 5
+                        is_active = entry[2] if entry[2] is not None else True
+                    else:
+                        # Skip invalid entries
+                        continue
+                    
+                    # Use a default category since it might not be in the database
+                    category = "general"
                     
                     if content and is_active:  # Only load active memories with content
                         self.add_memory(character_id, {
@@ -885,7 +948,7 @@ class MemoryManager:
         try:
             # Create a new session if one wasn't provided
             should_close_session = False
-            if session is None:
+            if (session is None):
                 session = self.db.get_session()
                 should_close_session = True
                 
@@ -896,15 +959,15 @@ class MemoryManager:
                     "id": str(uuid.uuid4()),
                     "character_id": character_id or self.character_id,
                     "user_id": user_id,  # Use provided user_id
-                    "memory_type": memory.get("type", "other"),
+                    "memory_type": memory.get("type", "other"),  # Fixed: Using memory_type instead of type
                     "category": memory.get("category", "general"),
                     "content": memory.get("content", ""),
                     "importance": memory.get("importance", 5),
-                    "created_at": datetime.datetime.now(),  # Fix: Use datetime.datetime.now() instead of datetime.now()
-                    "updated_at": datetime.datetime.now()   # Fix: Use datetime.datetime.now() instead of datetime.now()
+                    "created_at": datetime.datetime.now(),
+                    "updated_at": datetime.datetime.now()
                 }
                 
-                # Insert the memory into the database
+                # Insert the memory into the database - updated to use memory_type
                 query = text("""
                     INSERT INTO memory_entries 
                     (id, character_id, user_id, memory_type, category, content, importance, created_at, updated_at)
@@ -937,3 +1000,168 @@ class MemoryManager:
                 if should_close_session:
                     session.close()
             return 0
+
+def load_memories_for_character(db_session: Session, character_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+    """
+    Load memories for a character from the database
+    
+    Args:
+        db_session: SQLAlchemy session
+        character_id: UUID of the character
+        limit: Maximum number of memories to return
+    
+    Returns:
+        List of memory dictionaries
+    """
+    try:
+        # First check if we have a memory_type or type column
+        columns_result = db_session.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'memory_entries'
+            AND column_name IN ('type', 'memory_type')
+        """)).fetchall()
+        
+        column_names = [col[0] for col in columns_result]
+        
+        has_type = 'type' in column_names
+        has_memory_type = 'memory_type' in column_names
+        
+        # Dynamically build the query based on available columns
+        type_column = None
+        if has_memory_type:
+            type_column = 'memory_type'
+        elif has_type:
+            type_column = 'type'
+
+        # Check if category column exists
+        has_category = db_session.execute(text("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'memory_entries' AND column_name = 'category'
+            )
+        """)).scalar()
+            
+        if type_column and has_category:
+            query = text(f"""
+                SELECT {type_column}, category, content, importance, is_active, created_at 
+                FROM memory_entries
+                WHERE character_id::text = :character_id
+                AND (is_active IS NULL OR is_active = TRUE)
+                ORDER BY importance DESC, created_at DESC
+                LIMIT :limit
+            """)
+        elif type_column:
+            query = text(f"""
+                SELECT {type_column}, content, importance, is_active, created_at 
+                FROM memory_entries
+                WHERE character_id::text = :character_id
+                AND (is_active IS NULL OR is_active = TRUE)
+                ORDER BY importance DESC, created_at DESC
+                LIMIT :limit
+            """)
+        else:
+            # Fallback if no type column found
+            query = text("""
+                SELECT content, importance, is_active, created_at 
+                FROM memory_entries
+                WHERE character_id::text = :character_id
+                AND (is_active IS NULL OR is_active = TRUE)
+                ORDER BY importance DESC, created_at DESC
+                LIMIT :limit
+            """)
+        
+        result = db_session.execute(query, {
+            "character_id": str(character_id),
+            "limit": limit
+        })
+        
+        memories = result.fetchall()
+        
+        # Convert to list of dictionaries
+        memory_list = []
+        for memory in memories:
+            if type_column and has_category:
+                memory_dict = {
+                    "type": memory[0] if memory[0] else "unknown",
+                    "category": memory[1] if memory[1] else "general",
+                    "content": memory[2],
+                    "importance": memory[3] if memory[3] is not None else 5,
+                    "is_active": memory[4] if len(memory) > 4 and memory[4] is not None else True,
+                    "created_at": memory[5] if len(memory) > 5 else None
+                }
+            elif type_column:
+                memory_dict = {
+                    "type": memory[0] if memory[0] else "unknown",
+                    "category": "general",  # Default since column doesn't exist
+                    "content": memory[1],
+                    "importance": memory[2] if memory[2] is not None else 5,
+                    "is_active": memory[3] if len(memory) > 3 and memory[3] is not None else True,
+                    "created_at": memory[4] if len(memory) > 4 else None
+                }
+            else:
+                memory_dict = {
+                    "type": "unknown",  # Default type
+                    "category": "general",  # Default category
+                    "content": memory[0],
+                    "importance": memory[1] if memory[1] is not None else 5,
+                    "is_active": memory[2] if len(memory) > 2 and memory[2] is not None else True,
+                    "created_at": memory[3] if len(memory) > 3 else None
+                }
+            memory_list.append(memory_dict)
+            
+        logger.info(f"Loaded {len(memory_list)} memories for character {character_id}")
+        return memory_list
+        
+    except Exception as e:
+        logger.error(f"Error loading memories from database: {e}")
+        return []
+        
+def save_memory(db_session: Session, character_id: str, user_id: str, memory_data: Dict[str, Any]) -> bool:
+    """
+    Save a memory to the database
+    
+    Args:
+        db_session: SQLAlchemy session
+        character_id: UUID of the character
+        user_id: UUID of the user
+        memory_data: Memory data dictionary
+    
+    Returns:
+        Success status
+    """
+    try:
+        # Extract memory fields with defaults
+        memory_type = memory_data.get("type", "fact")
+        content = memory_data.get("content", "")
+        importance = memory_data.get("importance", 5)
+        category = memory_data.get("category", "general")
+        
+        if not content:
+            logger.warning("Attempted to save memory with empty content")
+            return False
+        
+        query = text("""
+            INSERT INTO memory_entries 
+            (id, character_id, user_id, memory_type, category, content, importance, is_active, created_at, updated_at)
+            VALUES 
+            (gen_random_uuid(), :character_id, :user_id, :memory_type, :category, :content, :importance, TRUE, NOW(), NOW())
+        """)
+        
+        db_session.execute(query, {
+            "character_id": character_id,
+            "user_id": user_id,
+            "memory_type": memory_type,  # Use the "type" field from memory_data but save it to "memory_type" column
+            "category": category,
+            "content": content,
+            "importance": importance
+        })
+        
+        db_session.commit()
+        logger.info(f"Successfully saved memory for character {character_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error saving memory: {e}")
+        db_session.rollback()
+        return False

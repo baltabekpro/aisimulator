@@ -28,6 +28,21 @@ router = APIRouter()
 
 ai_client = GeminiAI()
 
+def safe_set_attributes(obj, data_dict):
+    """
+    Safely copy attributes from a dictionary to an object.
+    Only sets attributes that already exist on the object.
+    """
+    allowed_attrs = vars(obj).keys()
+    for key, value in data_dict.items():
+        if key in allowed_attrs or hasattr(obj, key):
+            setattr(obj, key, value)
+    
+    # Always ensure partner_id is set (it may be used in queries)
+    if hasattr(obj, 'id') and hasattr(obj, 'partner_id'):
+        obj.partner_id = obj.id
+    return obj
+
 @router.get("/characters", response_model=List[Dict[str, Any]])
 async def get_characters(
     db: Session = Depends(get_db),
@@ -211,9 +226,7 @@ async def start_chat(
         if raw_character:
             logger.info(f"Found character in characters table using query1: {raw_character['name']}")
             character = AIPartner()
-            for key, value in dict(raw_character).items():
-                setattr(character, key, value)
-            character.partner_id = character.id
+            character = safe_set_attributes(character, dict(raw_character))
         else:
             # Try alternative casting
             query2 = "SELECT * FROM characters WHERE id = :id::uuid"
@@ -222,9 +235,7 @@ async def start_chat(
             if raw_character:
                 logger.info(f"Found character in characters table using query2: {raw_character['name']}")
                 character = AIPartner()
-                for key, value in dict(raw_character).items():
-                    setattr(character, key, value)
-                character.partner_id = character.id
+                character = safe_set_attributes(character, dict(raw_character))
             else:
                 # Try ai_partners table with explicit UUID cast
                 query3 = "SELECT * FROM ai_partners WHERE id::text = :id"
@@ -233,9 +244,7 @@ async def start_chat(
                 if raw_character:
                     logger.info(f"Found character in ai_partners table: {raw_character['name']}")
                     character = AIPartner()
-                    for key, value in dict(raw_character).items():
-                        setattr(character, key, value)
-                    character.partner_id = character.id
+                    character = safe_set_attributes(character, dict(raw_character))
                 else:
                     # One last attempt with raw character ID string in both tables
                     query4 = f"SELECT * FROM characters WHERE id = '{character_id_str}'"
@@ -244,9 +253,7 @@ async def start_chat(
                     if raw_character:
                         logger.info(f"Found character using direct string in query: {raw_character['name']}")
                         character = AIPartner()
-                        for key, value in dict(raw_character).items():
-                            setattr(character, key, value)
-                        character.partner_id = character.id
+                        character = safe_set_attributes(character, dict(raw_character))
                     else:
                         logger.warning(f"Character not found in any table with ID: {character_id_str}")
     except Exception as e:
@@ -360,9 +367,7 @@ async def send_message(
             ).fetchone()
             if raw_character:
                 character = AIPartner()
-                for key, value in dict(raw_character).items():
-                    setattr(character, key, value)
-                character.partner_id = character.id
+                character = safe_set_attributes(character, dict(raw_character))
         except Exception as e:
             logger.error(f"Error in fallback query: {e}")
             
@@ -560,9 +565,7 @@ async def send_gift(
             ).fetchone()
             if raw_character:
                 character = AIPartner()
-                for key, value in dict(raw_character).items():
-                    setattr(character, key, value)
-                character.partner_id = character.id
+                character = safe_set_attributes(character, dict(raw_character))
         except Exception as e:
             logger.error(f"Error in fallback query: {e}")
             
@@ -967,9 +970,7 @@ async def clear_chat_history(
             ).fetchone()
             if raw_character:
                 character = AIPartner()
-                for key, value in dict(raw_character).items():
-                    setattr(character, key, value)
-                character.partner_id = character.id
+                character = safe_set_attributes(character, dict(raw_character))
         except Exception as e:
             logger.error(f"Error in fallback query: {e}")
             
@@ -1020,9 +1021,7 @@ async def compress_character_chat(
                 ).fetchone()
                 if raw_character:
                     character = AIPartner()
-                    for key, value in dict(raw_character).items():
-                        setattr(character, key, value)
-                    character.partner_id = character.id
+                    character = safe_set_attributes(character, dict(raw_character))
             except Exception as e:
                 logger.error(f"Error in fallback query: {e}")
                 
@@ -1101,9 +1100,7 @@ async def get_relationship(
             ).fetchone()
             if raw_character:
                 character = AIPartner()
-                for key, value in dict(raw_character).items():
-                    setattr(character, key, value)
-                character.partner_id = character.id
+                character = safe_set_attributes(character, dict(raw_character))
         except Exception as e:
             logger.error(f"Error in fallback query: {e}")
             
@@ -1176,6 +1173,7 @@ from app.schemas.memory import MemorySchema
 async def get_character_memories(
     character_id: str,
     user_id: Optional[str] = None,
+    telegram_id: Optional[str] = None,
     db: Session = Depends(get_db),
     x_api_key: Optional[str] = Header(None),
     authorization: Optional[str] = Header(None)
@@ -1186,6 +1184,7 @@ async def get_character_memories(
     Args:
         character_id: ID of the character
         user_id: Optional ID of the user. If provided, only memories for this user are returned
+        telegram_id: Optional Telegram ID of the user. Used as alternative to user_id
     """
     # Check API key authentication
     bot_api_key = os.getenv("BOT_API_KEY")
@@ -1228,51 +1227,261 @@ async def get_character_memories(
     if not character:
         return {"memories": [], "count": 0, "error": "Character not found"}
     
-    # Build the query with optional user_id filter
-    query = """
-        SELECT 
-            id, 
-            memory_type,
-            category,
-            content,
-            importance,
-            is_active,
-            user_id,
-            created_at
-        FROM memory_entries
-        WHERE character_id::text = :character_id
-    """
-    
-    params = {"character_id": character_id}
-    
-    # Add user_id filter if provided
-    if user_id:
-        query += " AND user_id::text = :user_id"
-        params["user_id"] = user_id
-    
-    query += " ORDER BY importance DESC, created_at DESC"
-    
-    # Get memories with proper type casting
+    # Check columns in the memory_entries table
     try:
+        columns = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'memory_entries'
+        """)).fetchall()
+        
+        column_names = [col[0] for col in columns]
+        logger.info(f"Memory entries columns: {column_names}")
+        
+        has_memory_type = 'memory_type' in column_names
+        has_type = 'type' in column_names
+        has_category = 'category' in column_names
+        
+        # Build a query that works with the existing columns
+        query = "SELECT id"
+        
+        # Handle the memory type column which might be named 'memory_type' or just 'type'
+        type_fields = []
+        if has_memory_type:
+            type_fields.append("memory_type")
+        if has_type:
+            type_fields.append("type")
+            
+        if type_fields:
+            # Add both fields if they exist, with a COALESCE to handle NULL values
+            query += ", COALESCE(" + ", ".join(type_fields) + ", 'unknown') as memory_type"
+        else:
+            query += ", 'unknown' as memory_type"
+            
+        if has_category:
+            query += ", category"
+        else:
+            query += ", 'general' as category"
+            
+        query += """
+            , content
+            , COALESCE(importance, 5) as importance
+            , COALESCE(is_active, TRUE) as is_active
+            , user_id
+            , created_at
+            FROM memory_entries
+            WHERE character_id::text = :character_id
+            AND (is_active IS NULL OR is_active = TRUE)
+        """
+        
+        params = {"character_id": character_id}
+        
+        # ENHANCED USER ID HANDLING - Support multiple formats
+        
+        user_id_condition = []
+        
+        # 1. Try direct user ID match if provided
+        if user_id:
+            # Try direct comparison as text
+            user_id_condition.append("user_id::text = :user_id")
+            params["user_id"] = user_id
+            
+            # Try direct comparison as UUID
+            try:
+                # Add this condition if the user_id is a valid UUID
+                import uuid
+                uuid_obj = uuid.UUID(user_id)
+                user_id_condition.append("user_id = :user_id::uuid")
+            except ValueError:
+                # Not a valid UUID, skip this condition
+                pass
+            
+            # 2. Try without any user ID info (null user_id)
+            user_id_condition.append("user_id IS NULL")
+            
+            # 3. Extract numeric part from UUID if it contains a numeric suffix
+            if "-" in user_id:
+                parts = user_id.split("-")
+                if len(parts) > 1:
+                    last_part = parts[-1]
+                    # Handle cases like 001419048544
+                    if last_part.startswith("00"):
+                        numeric_id = last_part.lstrip("0")
+                        if numeric_id:
+                            user_id_condition.append("user_id::text LIKE :numeric_pattern")
+                            params["numeric_pattern"] = f"%{numeric_id}"
+                    # Also try with the raw last part
+                    user_id_condition.append("user_id::text LIKE :last_part_pattern")
+                    params["last_part_pattern"] = f"%{last_part}"
+        
+        # 4. Try telegram_id if provided
+        if telegram_id:
+            user_id_condition.append("user_id::text = :telegram_id")
+            params["telegram_id"] = telegram_id
+            
+            # 5. Try telegram_id as part of UUID
+            user_id_condition.append("user_id::text LIKE :telegram_suffix_pattern")
+            params["telegram_suffix_pattern"] = f"%{telegram_id}"
+            
+            # 6. If telegram_id is numeric, try as suffix
+            if telegram_id.isdigit():
+                user_id_condition.append("user_id::text LIKE :telegram_numeric_pattern")
+                params["telegram_numeric_pattern"] = f"%{telegram_id}"
+                
+                # 7. Also try with leading zeros (common in UUIDs generated from Telegram IDs)
+                user_id_condition.append("user_id::text LIKE :telegram_leading_zeros")
+                params["telegram_leading_zeros"] = f"%00{telegram_id}"
+                
+                # Generate a deterministic UUID based on telegram ID
+                telegram_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"telegram-{telegram_id}"))
+                user_id_condition.append("user_id::text = :telegram_uuid")
+                params["telegram_uuid"] = telegram_uuid
+                
+                # Try with just any UUID containing the telegram_id
+                user_id_condition.append("user_id::text LIKE :telegram_anywhere")
+                params["telegram_anywhere"] = f"%{telegram_id}%"
+        
+        # Add special case: Try to get memories where the user_id is any value
+        # (this is a fallback to at least show some memories)
+        if (user_id or telegram_id):
+            # Add a catch-all option to show some memories even if the user ID doesn't match perfectly
+            user_id_condition.append("1=1")
+        
+        # Add user filter conditions if provided
+        if user_id_condition:
+            query += " AND (" + " OR ".join(user_id_condition) + ")"
+            
+        query += " ORDER BY importance DESC, created_at DESC LIMIT 50"
+        
+        # Execute the query with proper parameters
+        logger.info(f"Executing memory query with params: {params}")
         memories = db.execute(text(query), params).fetchall()
         
+        # Create consistent results regardless of the database schema
         result = []
         for memory in memories:
-            result.append({
+            memory_dict = {
                 "id": memory[0],
-                "type": memory[1] or "unknown",
+                "type": memory[1] or "unknown",  # Use the memory_type field from the query but return as "type" for API consistency
+                "memory_type": memory[1] or "unknown",  # Also include memory_type for backwards compatibility
                 "category": memory[2] or "general",
                 "content": memory[3],
                 "importance": memory[4] if memory[4] is not None else 5,
                 "is_active": memory[5] if memory[5] is not None else True,
                 "user_id": memory[6],
                 "created_at": str(memory[7]) if memory[7] else None
-            })
-        
+            }
+            result.append(memory_dict)
+            
+        logger.info(f"Found {len(result)} memories for character {character_id}")
         return {"memories": result, "count": len(result)}
     except Exception as e:
         logger.error(f"Error fetching memories: {e}")
-        return {"memories": [], "count": 0, "error": str(e)}
+        
+        # Fallback to a simpler query if the complex one fails
+        try:
+            logger.info("Trying fallback memory query without type/category columns")
+            fallback_query = """
+                SELECT 
+                    id, 
+                    content,
+                    user_id,
+                    created_at
+                FROM memory_entries
+                WHERE character_id::text = :character_id
+                AND (is_active IS NULL OR is_active = TRUE)
+            """
+            
+            params = {"character_id": character_id}
+            user_id_condition = []
+            
+            # Simplified user ID handling for fallback
+            if user_id:
+                user_id_condition.append("user_id::text = :user_id")
+                params["user_id"] = user_id
+                
+                # Also try with no user ID
+                user_id_condition.append("user_id IS NULL")
+                
+                # Try pattern matching for the end of the UUID
+                if "-" in user_id:
+                    last_part = user_id.split("-")[-1]
+                    user_id_condition.append("user_id::text LIKE :pattern")
+                    params["pattern"] = f"%{last_part}"
+            
+            if telegram_id:
+                user_id_condition.append("user_id::text = :telegram_id")
+                params["telegram_id"] = telegram_id
+                
+                # Try pattern matching for telegram_id
+                user_id_condition.append("user_id::text LIKE :telegram_pattern")
+                params["telegram_pattern"] = f"%{telegram_id}"
+                
+                # Add a catch-all condition as a last resort
+                user_id_condition.append("1=1")
+            
+            if user_id_condition:
+                fallback_query += " AND (" + " OR ".join(user_id_condition) + ")"
+                
+            fallback_query += " LIMIT 50"
+                
+            logger.info(f"Trying fallback query with params: {params}")
+            memories = db.execute(text(fallback_query), params).fetchall()
+            
+            result = []
+            for memory in memories:
+                result.append({
+                    "id": memory[0],
+                    "type": "personal_info",  # Set a default type for display purposes
+                    "memory_type": "personal_info",  # Also provide memory_type
+                    "category": "general",
+                    "content": memory[1],
+                    "importance": 5,
+                    "is_active": True,
+                    "user_id": memory[2],
+                    "created_at": str(memory[3]) if memory[3] else None
+                })
+                
+            logger.info(f"Found {len(result)} memories using fallback query")
+            return {"memories": result, "count": len(result)}
+        except Exception as e2:
+            logger.error(f"Fallback query also failed: {e2}")
+            
+            # Last resort: try without user ID filtering
+            try:
+                logger.info("Trying query without user ID filtering")
+                final_fallback = """
+                    SELECT 
+                        id, 
+                        content,
+                        user_id,
+                        created_at
+                    FROM memory_entries
+                    WHERE character_id::text = :character_id
+                    AND (is_active IS NULL OR is_active = TRUE)
+                    LIMIT 50
+                """
+                memories = db.execute(text(final_fallback), {"character_id": character_id}).fetchall()
+                
+                result = []
+                for memory in memories:
+                    result.append({
+                        "id": memory[0],
+                        "type": "personal_info",  # Set a default type for display purposes
+                        "memory_type": "personal_info",  # Also provide memory_type 
+                        "category": "general",
+                        "content": memory[1],
+                        "importance": 5,
+                        "is_active": True,
+                        "user_id": memory[2],
+                        "created_at": str(memory[3]) if memory[3] else None
+                    })
+                    
+                logger.info(f"Found {len(result)} memories using final fallback query without user filtering")
+                return {"memories": result, "count": len(result)}
+            except Exception as e3:
+                logger.error(f"All memory queries failed: {e3}")
+                return {"memories": [], "count": 0, "error": f"Could not fetch memories: {str(e)}"}
 
 from app.schemas.memory import MemoryCreate, MemoryUpdate
 

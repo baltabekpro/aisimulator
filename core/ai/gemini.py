@@ -16,6 +16,9 @@ import logging
 from pathlib import Path
 from core.utils.db_helpers import save_message_safely, ensure_string_id
 
+# Import our universal ID module
+from core.utils.universal_id import ensure_uuid, is_valid_uuid, get_user_id_formats, get_platform_user_id
+
 # Make sure to load environment variables
 load_dotenv()
 
@@ -415,21 +418,14 @@ class GeminiAI:
             if db_session and user_id and not is_ui_command:
                 try:
                     from core.models import Message
-                    from uuid import UUID
                     
-                    # Convert IDs if needed - use try/except block for each ID conversion
-                    try:
-                        user_uuid = UUID(user_id) if isinstance(user_id, str) else user_id
-                    except ValueError:
-                        logger.warning(f"Invalid user_id UUID format '{user_id}', generating new UUID")
-                        user_uuid = uuid4()
-                        
-                    try:
-                        char_uuid = UUID(character_id) if isinstance(character_id, str) else character_id
-                    except ValueError:
-                        logger.warning(f"Invalid character_id UUID format '{character_id}', generating new UUID")
-                        char_uuid = uuid4()
-                        
+                    # Use our universal_id utility for consistent ID handling
+                    # This handles any ID format (integers, strings, UUIDs)
+                    user_uuid = ensure_uuid(user_id)
+                    
+                    # Also ensure character_id is a valid UUID
+                    char_uuid = ensure_uuid(character_id)
+                    
                     # Create and save user message
                     user_db_message = Message(
                         sender_id=user_uuid,
@@ -441,12 +437,11 @@ class GeminiAI:
                     )
                     db_session.add(user_db_message)
                     db_session.commit()
-                    logger.info(f"✅ User message saved to messages table in database")
+                    logger.info(f"✅ User message saved to messages table in database with ID format: {user_uuid}")
+                    
                 except Exception as msg_error:
                     logger.error(f"❌ Error saving user message to database: {msg_error}")
                     db_session.rollback()
-                except Exception as ex:
-                    logger.error(f"Error attempting to save user message to database: {ex}")
             
             # For UI commands, provide specialized responses without calling the API
             if is_ui_command:
@@ -543,51 +538,39 @@ class GeminiAI:
                 if db_session and user_id and not is_ui_command:
                     try:
                         from core.models import Message
-                        from uuid import UUID
                         
-                        # Helper function to safely convert string to UUID
-                        def safe_uuid(uuid_str):
-                            try:
-                                if isinstance(uuid_str, UUID):
-                                    return uuid_str
-                                if isinstance(uuid_str, str):
-                                    return UUID(uuid_str)
-                                return uuid4()  # Generate new UUID if conversion fails
-                            except ValueError:
-                                logger.warning(f"Invalid UUID format: {uuid_str}, generating new one")
-                                return uuid4()
+                        # Use our universal_id utility for any source platform
+                        user_uuid_str = ensure_uuid(user_id)
+                        char_uuid_str = ensure_uuid(character_id)
                         
                         # Create and save assistant message with proper UUIDs
-                        try:
-                            assistant_db_message = Message(
-                                id=uuid4(),  # Always generate a fresh UUID for the message
-                                sender_id=safe_uuid(character_id),
-                                sender_type="character",
-                                recipient_id=safe_uuid(user_id),
-                                recipient_type="user",
-                                content=result["text"],
-                                emotion=result.get("emotion", "neutral")
-                            )
-                            db_session.add(assistant_db_message)
-                            db_session.commit()
-                            logger.info(f"✅ Assistant response saved to messages table in database")
-                        except Exception as db_error:
-                            logger.error(f"❌ Error saving message to database: {db_error}")
-                            db_session.rollback()
-                    except Exception as ex:
-                        logger.error(f"Error attempting to save assistant response to database: {ex}")
+                        assistant_db_message = Message(
+                            id=uuid4(),  # Always generate a fresh UUID for the message
+                            sender_id=char_uuid_str,
+                            sender_type="character",
+                            recipient_id=user_uuid_str,
+                            recipient_type="user",
+                            content=result["text"],
+                            emotion=result.get("emotion", "neutral")
+                        )
+                        db_session.add(assistant_db_message)
+                        db_session.commit()
+                        logger.info(f"✅ Assistant response saved to messages table in database")
+                    except Exception as db_error:
+                        logger.error(f"❌ Error saving message to database: {db_error}")
+                        db_session.rollback()
                 
                 # Save updated conversation to database
                 try:
                     if db_session:
-                        # Make sure user_id is a valid string
-                        user_id_str = ensure_string_id(user_id)
-                        character_id_str = ensure_string_id(character_id)
+                        # Use our universal ID utility for consistent handling
+                        user_id_str = ensure_uuid(user_id)
+                        character_id_str = ensure_uuid(character_id)
                         
                         save_success = self.conversation_manager.save_conversation_to_database(
                             character_id=character_id_str,
                             user_id=user_id_str,
-                            db_session=db_session  # Pass the session but don't pass it as the user_id
+                            db_session=db_session
                         )
                         if save_success:
                             logger.info("✅ Conversation successfully saved to database")
@@ -992,19 +975,19 @@ class GeminiAI:
                     clean_response_text = self._clean_markdown_for_telegram(response_text)
                     result = {
                         "text": clean_response_text,
-                        "emotion": self._extract_emotion(context, response_text),
+                        "emotion": self._extract_emotion(context, clean_response_text),  # Using clean_response_text instead of undefined 'text'
                         "relationship_changes": {"general": 0}
                     }
+                    return result
             else:
                 # Not JSON, create a standard response structure
                 clean_response_text = self._clean_markdown_for_telegram(response_text)
                 result = {
                     "text": clean_response_text,
-                    "emotion": self._extract_emotion(context, response_text),
+                    "emotion": self._extract_emotion(context, clean_response_text),  # Using clean_response_text instead of undefined 'text'
                     "relationship_changes": {"general": 0}
                 }
-            
-            return result
+                return result
         
         except Exception as e:
             logger.exception(f"Error processing response: {e}")

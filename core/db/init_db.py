@@ -20,6 +20,13 @@ def init_db():
         # Create all tables
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
+        
+        # Apply necessary schema fixes after table creation
+        fix_schema_issues()
+        add_external_id_to_users()
+        create_admin_message_view()
+        
+        logger.info("Schema modifications completed successfully")
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
         raise
@@ -34,7 +41,10 @@ def create_test_data():
     try:
         # Check if we already have test data
         existing_users = db.query(User).count()
-        existing_partners = db.query(AIPartner).count()
+        
+        # Direct SQL check for AI partners (safer than ORM for this case)
+        partner_count_result = db.execute(sa.text("SELECT COUNT(*) FROM ai_partners")).scalar()
+        existing_partners = partner_count_result if partner_count_result is not None else 0
         
         if existing_users > 0 and existing_partners > 0:
             logger.info("Test data already exists, skipping creation")
@@ -42,75 +52,130 @@ def create_test_data():
         
         logger.info("Creating test data...")
         
-        # Create test admin user
-        test_admin = User(
-            user_id=uuid.uuid4(),
-            username="admin",
-            email="admin@example.com",
-            name="Admin User",
-            is_admin=True,
-            is_active=True
-        )
-        test_admin.set_password("admin123")
-        db.add(test_admin)
+        # Only create users if they don't already exist
+        if existing_users == 0:
+            logger.info("Creating test users...")
+            # Check if specific usernames already exist
+            admin_exists = db.execute(sa.text("SELECT COUNT(*) FROM users WHERE username = 'admin'")).scalar() > 0
+            user_exists = db.execute(sa.text("SELECT COUNT(*) FROM users WHERE username = 'user'")).scalar() > 0
+            
+            # Create test admin user if it doesn't exist
+            if not admin_exists:
+                test_admin = User(
+                    user_id=uuid.uuid4(),
+                    username="admin",
+                    email="admin@example.com",
+                    name="Admin User",
+                    is_admin=True,
+                    is_active=True
+                )
+                test_admin.set_password("admin123")
+                db.add(test_admin)
+                logger.info("Created admin user")
+            else:
+                logger.info("Admin user already exists, skipping creation")
+            
+            # Create test regular user if it doesn't exist
+            if not user_exists:
+                test_user = User(
+                    user_id=uuid.uuid4(),
+                    username="user",
+                    email="user@example.com",
+                    name="Test User",
+                    is_admin=False,
+                    is_active=True
+                )
+                test_user.set_password("password123")
+                db.add(test_user)
+                logger.info("Created regular user")
+            else:
+                logger.info("Regular user already exists, skipping creation")
+            
+            # Commit user changes separately
+            try:
+                db.commit()
+                logger.info("User creation successful")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to create users: {e}")
+        else:
+            logger.info(f"Already have {existing_users} users, skipping user creation")
         
-        # Create test regular user
-        test_user = User(
-            user_id=uuid.uuid4(),
-            username="user",
-            email="user@example.com",
-            name="Test User",
-            is_admin=False,
-            is_active=True
-        )
-        test_user.set_password("password123")
-        db.add(test_user)
+        # Only create partners if they don't already exist
+        if existing_partners == 0:
+            logger.info("Creating AI partners...")
+            # First check what columns actually exist in the table
+            inspector = sa.inspect(engine)
+            
+            # Get actual column names from ai_partners table
+            existing_columns = {col['name'] for col in inspector.get_columns('ai_partners')}
+            logger.info(f"Available columns in ai_partners table: {existing_columns}")
+            
+            # Create test AI partners using only the columns that actually exist in the table
+            test_partners = [
+                {
+                    "id": str(uuid.uuid4()),
+                    "name": "Алиса",
+                    "gender": "female",
+                    "personality_traits": json.dumps(["дружелюбная", "общительная", "веселая"]),
+                    "interests": json.dumps(["музыка", "искусство", "путешествия"]),
+                    "background": "Алиса - творческая личность, которая любит путешествовать и знакомиться с новыми людьми.",
+                    "current_emotion": "happy"
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "name": "Мария",
+                    "gender": "female", 
+                    "personality_traits": json.dumps(["умная", "спокойная", "загадочная"]),
+                    "interests": json.dumps(["чтение", "психология", "йога"]),
+                    "background": "Мария - глубокая и философски настроенная натура, интересующаяся духовным развитием.",
+                    "current_emotion": "neutral"
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "name": "София",
+                    "gender": "female",
+                    "personality_traits": json.dumps(["энергичная", "амбициозная", "уверенная"]),
+                    "interests": json.dumps(["спорт", "бизнес", "технологии"]),
+                    "background": "София - целеустремленная девушка, увлеченная саморазвитием и новыми технологиями.",
+                    "current_emotion": "excited"
+                }
+            ]
+            
+            # Filter out non-existent columns for each partner
+            partners_added = 0
+            for partner in test_partners:
+                # Keep only columns that exist in the table
+                filtered_partner = {k: v for k, v in partner.items() if k in existing_columns}
+                
+                if filtered_partner:
+                    columns = ", ".join(filtered_partner.keys())
+                    placeholders = ", ".join([f":{key}" for key in filtered_partner.keys()])
+                    
+                    try:
+                        insert_query = sa.text(f"INSERT INTO ai_partners ({columns}) VALUES ({placeholders})")
+                        db.execute(insert_query, filtered_partner)
+                        logger.info(f"Inserted partner: {filtered_partner['name']}")
+                        partners_added += 1
+                    except Exception as e:
+                        logger.error(f"Failed to insert partner {filtered_partner.get('name', 'unknown')}: {e}")
+            
+            # Commit partner changes
+            if partners_added > 0:
+                try:
+                    db.commit()
+                    logger.info(f"Successfully added {partners_added} AI partners")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Failed to commit AI partners: {e}")
+        else:
+            logger.info(f"Already have {existing_partners} AI partners, skipping creation")
         
-        # Create test AI partners
-        test_partners = [
-            {
-                "partner_id": uuid.uuid4(),
-                "name": "Алиса",
-                "age": 24,
-                "gender": "female",
-                "personality_traits": json.dumps(["дружелюбная", "общительная", "веселая"]),
-                "interests": json.dumps(["музыка", "искусство", "путешествия"]),
-                "background": "Алиса - творческая личность, которая любит путешествовать и знакомиться с новыми людьми.",
-                "current_emotion": "happy"
-            },
-            {
-                "partner_id": uuid.uuid4(),
-                "name": "Мария",
-                "age": 26,
-                "gender": "female",
-                "personality_traits": json.dumps(["умная", "спокойная", "загадочная"]),
-                "interests": json.dumps(["чтение", "психология", "йога"]),
-                "background": "Мария - глубокая и философски настроенная натура, интересующаяся духовным развитием.",
-                "current_emotion": "neutral"
-            },
-            {
-                "partner_id": uuid.uuid4(),
-                "name": "София",
-                "age": 22,
-                "gender": "female",
-                "personality_traits": json.dumps(["энергичная", "амбициозная", "уверенная"]),
-                "interests": json.dumps(["спорт", "бизнес", "технологии"]),
-                "background": "София - целеустремленная девушка, увлеченная саморазвитием и новыми технологиями.",
-                "current_emotion": "excited"
-            }
-        ]
+        logger.info("Test data creation completed")
         
-        for partner_data in test_partners:
-            test_partner = AIPartner(**partner_data)
-            db.add(test_partner)
-        
-        db.commit()
-        logger.info("Test data created successfully")
-    
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating test data: {e}")
-        raise
     finally:
         db.close()
 
@@ -119,7 +184,8 @@ def fix_schema_issues():
     Fix common schema issues by checking columns and adding missing ones
     This is a simple alternative to full migrations for development
     """
-    from sqlalchemy import inspect, Column, String, Integer, DateTime, Text, Boolean, UUID
+    from sqlalchemy import inspect, Column, String, Integer, DateTime, Text, Boolean
+    # No need to import UUID type, we'll use TEXT or native SQL for it
     import sqlite3
     
     inspector = inspect(engine)
@@ -302,20 +368,36 @@ def fix_schema_issues():
                 logger.info("Adding id column to messages table (non-SQLite)")
                 try:
                     with engine.begin() as conn:
-                        # Check if PostgreSQL supports gen_random_uuid() function
-                        try:
-                            conn.execute(sa.text("SELECT gen_random_uuid()"))
-                            uuid_func = "gen_random_uuid()"
-                        except Exception:
-                            # Fallback to other UUID generation methods depending on database
-                            if 'postgres' in str(engine.url).lower():
-                                uuid_func = "uuid_generate_v4()"
-                            else:
-                                uuid_func = "uuid()"
-                                
-                        conn.execute(sa.text(f"ALTER TABLE messages ADD COLUMN id UUID DEFAULT {uuid_func}"))
+                        is_postgres = 'postgres' in str(engine.url).lower()
+                        
+                        if is_postgres:
+                            # Use text type with PostgreSQL functions
+                            try:
+                                conn.execute(sa.text("SELECT gen_random_uuid()"))
+                                uuid_func = "gen_random_uuid()"
+                            except Exception:
+                                try:
+                                    # Try another PostgreSQL UUID function
+                                    conn.execute(sa.text("SELECT uuid_generate_v4()"))
+                                    uuid_func = "uuid_generate_v4()"
+                                except Exception:
+                                    # Fallback to simple text
+                                    conn.execute(sa.text("ALTER TABLE messages ADD COLUMN id VARCHAR(36)"))
+                                    return
+                                    
+                            # Add column using PostgreSQL UUID type
+                            conn.execute(sa.text(f"ALTER TABLE messages ADD COLUMN id UUID DEFAULT {uuid_func}"))
+                        else:
+                            # For other databases, use VARCHAR
+                            conn.execute(sa.text("ALTER TABLE messages ADD COLUMN id VARCHAR(36)"))
                 except Exception as e:
                     logger.warning(f"Could not add id column: {e}")
+                    # Fallback to simple VARCHAR
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(sa.text("ALTER TABLE messages ADD COLUMN id VARCHAR(36)"))
+                    except Exception as inner_e:
+                        logger.error(f"Failed fallback for id column: {inner_e}")
                     
             # Handle column rename with better error checking
             if 'message_id' in msg_existing_cols and 'id' not in msg_existing_cols:
@@ -327,6 +409,74 @@ def fix_schema_issues():
                     logger.warning(f"Could not rename message_id column: {e}")
 
     logger.info("Schema fix completed successfully")
+
+def add_external_id_to_users():
+    """Add external_id column to users table if it doesn't exist."""
+    logger.info("Checking for external_id column in users table...")
+    inspector = sa.inspect(engine)
+    
+    try:
+        # Check if users table exists first
+        if 'users' not in inspector.get_table_names():
+            logger.info("Users table doesn't exist yet, skipping external_id check")
+            return
+        
+        # Check if external_id column already exists
+        user_columns = {col['name'] for col in inspector.get_columns('users')}
+        
+        if 'external_id' not in user_columns:
+            logger.info("Adding external_id column to users table")
+            with engine.begin() as conn:
+                # Add external_id column
+                conn.execute(sa.text("ALTER TABLE users ADD COLUMN external_id VARCHAR(255)"))
+                # Create index for faster lookups
+                conn.execute(sa.text("CREATE INDEX idx_users_external_id ON users(external_id)"))
+            
+            logger.info("Successfully added external_id column to users table")
+        else:
+            logger.info("external_id column already exists in users table")
+    except Exception as e:
+        logger.error(f"Error adding external_id column: {e}")
+
+def create_admin_message_view():
+    """Create or replace admin message view with correct type casting."""
+    logger.info("Creating or replacing admin message view with proper type casting...")
+    
+    try:
+        with engine.begin() as conn:
+            # Drop the view if it exists
+            try:
+                conn.execute(sa.text("DROP VIEW IF EXISTS admin_messages_view"))
+                logger.info("Dropped existing admin_messages_view")
+            except Exception as e:
+                logger.warning(f"Could not drop admin_messages_view: {e}")
+            
+            # Create the view with proper type casting
+            create_view_sql = """
+            CREATE OR REPLACE VIEW admin_messages_view AS
+            SELECT m.id, m.sender_id, m.sender_type, m.recipient_id, m.recipient_type,
+                   m.content, m.emotion, m.created_at,
+                   CASE 
+                       WHEN m.sender_type = 'user' AND u1.username IS NOT NULL THEN u1.username::text
+                       WHEN m.sender_type = 'character' AND c1.name IS NOT NULL THEN c1.name::text
+                       ELSE m.sender_id::text
+                   END as sender_name,
+                   CASE 
+                       WHEN m.recipient_type = 'user' AND u2.username IS NOT NULL THEN u2.username::text
+                       WHEN m.recipient_type = 'character' AND c2.name IS NOT NULL THEN c2.name::text
+                       ELSE m.recipient_id::text
+                   END as recipient_name
+            FROM messages m
+            LEFT JOIN users u1 ON m.sender_id::text = u1.user_id::text AND m.sender_type = 'user'
+            LEFT JOIN characters c1 ON m.sender_id::text = c1.id::text AND m.sender_type = 'character'
+            LEFT JOIN users u2 ON m.recipient_id::text = u2.user_id::text AND m.recipient_type = 'user'
+            LEFT JOIN characters c2 ON m.recipient_id::text = c2.id::text AND m.recipient_type = 'character'
+            """
+            
+            conn.execute(sa.text(create_view_sql))
+            logger.info("Successfully created admin_messages_view with proper type casting")
+    except Exception as e:
+        logger.error(f"Error creating admin message view: {e}")
 
 def create_test_character():
     """Create a test character with proper attributes to avoid errors"""

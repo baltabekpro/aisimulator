@@ -99,7 +99,7 @@ EMOTION_EMOJIS = {
     "angry": "😠",
     "excited": "😀",
     "anxious": "😰",
-    "neutral": "😐"
+    "neutral": ""
 }
 
 # Список доступных подарков
@@ -345,7 +345,7 @@ async def chat_handler(message: types.Message, state: FSMContext):
         response_text = clean_text_for_telegram(response.get("text", "Извините, я не смогла сформулировать ответ."))
         emotion = response.get("emotion", "neutral")
         
-        emoji = EMOTION_EMOJIS.get(emotion, "😐")
+        emoji = EMOTION_EMOJIS.get(emotion, "")
         
         relationship_changes = response.get("relationship_changes", {})
         relationship_text = format_relationship_changes(relationship_changes)
@@ -470,10 +470,11 @@ async def memory_button_handler(message: types.Message, state: FSMContext):
         
         # Get the proper user ID from storage or mapping
         user_uuid = await get_user_uuid_for_telegram_id(message.from_user.id, character_id)
-        logger.info(f"Using user UUID: {user_uuid} for Telegram ID: {message.from_user.id}")
+        logger.info(f"Using user UUID formats: {user_uuid} for Telegram ID: {message.from_user.id}")
         
         # Use the UUID-format user ID when fetching memories
-        memories = await get_character_memories_from_db(character_id, user_uuid)
+        # The API client now knows how to handle tuples of ID formats
+        memories = api_client.get_character_memories(character_id, user_uuid)
         
         # Delete loading message
         await loading_msg.delete()
@@ -580,7 +581,7 @@ async def get_user_uuid_for_telegram_id(telegram_id: int, character_id: str) -> 
         character_id: Character UUID to help with lookup
         
     Returns:
-        str: UUID format user ID
+        str: UUID format user ID or tuple of multiple formats to try
     """
     # First try to get from cached mapping if available
     if hasattr(get_user_uuid_for_telegram_id, "mapping") and telegram_id in get_user_uuid_for_telegram_id.mapping:
@@ -591,33 +592,47 @@ async def get_user_uuid_for_telegram_id(telegram_id: int, character_id: str) -> 
         get_user_uuid_for_telegram_id.mapping = {}
     
     try:
-        # Use both formats based on logs - we've seen two formats in use:
-        # 1. Decimal format: c7cb5b5c-e469-586e-8e87-001419048544 (with leading zeros)
-        # 2. Hex format: c7cb5b5c-e469-586e-8e87-96b254850242 (used by core.ai.memory_manager)
+        # Convert telegram_id to string and ensure it's a clean number
+        telegram_id_str = str(telegram_id).strip()
+        if not telegram_id_str.isdigit():
+            # If not a valid numeric ID, create a hash-based stable ID
+            import hashlib
+            hash_obj = hashlib.md5(telegram_id_str.encode())
+            hex_dig = hash_obj.hexdigest()
+            user_uuid = f"c7cb5b5c-e469-586e-8e87-{hex_dig[-12:]}"
+            logger.info(f"Created hash-based UUID for non-numeric ID: {user_uuid}")
+            get_user_uuid_for_telegram_id.mapping[telegram_id] = user_uuid
+            return user_uuid
+            
+        # Convert to integer for hex formatting
+        telegram_id_int = int(telegram_id_str)
         
-        # Format 1: with leading zeros
-        user_uuid_decimal = f"c7cb5b5c-e469-586e-8e87-{telegram_id:012d}"
+        # Create multiple UUID formats to try:
         
-        # Format 2: hex format (to match what we see in logs)
-        # Convert telegram_id to hex string while maintaining the exact same format seen in logs
-        # This matches what the backend is using when saving memories
-        hex_part = format(telegram_id, 'x')
-        user_uuid_hex = f"c7cb5b5c-e469-586e-8e87-{hex_part.zfill(12)}"
+        # 1. Hex format (primary format used by memory_manager)
+        user_uuid_hex = f"c7cb5b5c-e469-586e-8e87-{telegram_id_int:x}".replace(" ", "0")
         
-        # Use both formats as a tuple to allow the API client to try both
-        uuid_pair = (user_uuid_decimal, user_uuid_hex)
+        # 2. Decimal format with leading zeros
+        user_uuid_decimal = f"c7cb5b5c-e469-586e-8e87-{telegram_id_int:012d}"
+        
+        # 3. Raw telegram ID (for direct parameter)
+        user_uuid_raw = telegram_id_int
+        
+        # Combine all formats in a tuple to try all of them
+        uuid_formats = (user_uuid_hex, user_uuid_decimal, user_uuid_raw)
         
         # Store in mapping for future use
-        get_user_uuid_for_telegram_id.mapping[telegram_id] = uuid_pair
-        logger.info(f"Using UUID formats {user_uuid_decimal} and {user_uuid_hex} for Telegram ID: {telegram_id}")
+        get_user_uuid_for_telegram_id.mapping[telegram_id] = uuid_formats
+        logger.info(f"Created UUID formats for Telegram ID {telegram_id}: {user_uuid_hex, user_uuid_decimal}")
         
-        # Return both formats and the original telegram_id for maximum compatibility
-        return (user_uuid_hex, telegram_id)
+        # Return all formats to allow the API client to try them all
+        return uuid_formats
         
     except Exception as e:
-        logger.error(f"Error getting user UUID for Telegram ID {telegram_id}: {e}")
-        # Fallback to the decimal format with the telegram ID
-        return (f"c7cb5b5c-e469-586e-8e87-{telegram_id:012d}", telegram_id)
+        logger.error(f"Error creating user UUID for Telegram ID {telegram_id}: {e}")
+        # Fallback to a simple format
+        fallback_uuid = f"c7cb5b5c-e469-586e-8e87-{telegram_id}"
+        return (fallback_uuid, telegram_id)
 
 async def get_character_memories_from_db(character_id: str, user_id: int = None) -> List[Dict[str, Any]]:
     """

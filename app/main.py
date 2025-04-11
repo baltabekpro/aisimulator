@@ -42,7 +42,7 @@ from dotenv import load_dotenv
 from app.config import settings
 # Also import core.config settings to ensure both are available
 from core.config import settings as core_settings
-from app.api.v1 import auth, chat, debug, interactions
+from app.api.v1 import auth, chat, debug, interactions, store, users  # Добавляем импорт модуля users
 
 # Explicitly load environment variables
 load_dotenv()
@@ -181,6 +181,27 @@ app.include_router(
     interactions.router,
     prefix=f"{settings.API_V1_PREFIX}",
     tags=["interactions"]
+)
+
+# Add the new store router
+app.include_router(
+    store.router,
+    prefix=f"{settings.API_V1_PREFIX}",
+    tags=["store"]
+)
+
+# Добавляем маршрут для баланса пользователя
+app.include_router(
+    store.router,
+    prefix=f"{settings.API_V1_PREFIX}",
+    tags=["users"]
+)
+
+# Add the new users router
+app.include_router(
+    users.router,
+    prefix=f"{settings.API_V1_PREFIX}",
+    tags=["users"]
 )
 
 # Fix for debug router - make sure it's being included unconditionally or based on debug setting

@@ -19,6 +19,7 @@ import uuid
 import contextlib
 import psycopg2
 import psycopg2.extras
+import json
 from datetime import datetime
 
 # Заменим неработающий импорт
@@ -401,8 +402,8 @@ def create_user():
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Check if user already exists
-                cursor.execute('SELECT id FROM users WHERE username = %s OR email = %s', (username, email))
+                # Check if user already exists - use user_id instead of id
+                cursor.execute('SELECT user_id FROM users WHERE username = %s OR email = %s', (username, email))
                 if cursor.fetchone():
                     flash('Username or email already in use', 'danger')
                     return render_template('users/create.html')
@@ -413,9 +414,9 @@ def create_user():
                 # Hash the password
                 hashed_password = generate_password_hash(password)
                 
-                # Insert new user
+                # Insert new user - using user_id as column name
                 cursor.execute(
-                    'INSERT INTO users (id, username, email, password_hash, is_active, created_at) VALUES (%s, %s, %s, %s, %s, %s)',
+                    'INSERT INTO users (user_id, username, email, password_hash, is_active, created_at) VALUES (%s, %s, %s, %s, %s, %s)',
                     (user_id, username, email, hashed_password, True, datetime.now())
                 )
                 conn.commit()
@@ -511,39 +512,58 @@ def characters():
 @login_required
 def messages():
     try:
-        query = """
-            SELECT m.id, m.sender_id, m.sender_type, m.recipient_id, m.recipient_type, 
-                   m.content, m.emotion, m.created_at,
-                   CASE 
-                       WHEN m.sender_type = 'user' AND u1.username IS NOT NULL THEN u1.username
-                       WHEN m.sender_type = 'character' AND c1.name IS NOT NULL THEN c1.name
-                       ELSE m.sender_id 
-                   END as sender_name,
-                   CASE 
-                       WHEN m.recipient_type = 'user' AND u2.username IS NOT NULL THEN u2.username
-                       WHEN m.recipient_type = 'character' AND c2.name IS NOT NULL THEN c2.name
-                       ELSE m.recipient_id 
-                   END as recipient_name
-            FROM messages m
-            LEFT JOIN users u1 ON m.sender_id::text = u1.user_id::text AND m.sender_type = 'user'
-            LEFT JOIN characters c1 ON m.sender_id::text = c1.id::text AND m.sender_type = 'character'
-            LEFT JOIN users u2 ON m.recipient_id::text = u2.user_id::text AND m.recipient_type = 'user'
-            LEFT JOIN characters c2 ON m.recipient_id::text = c2.id::text AND m.recipient_type = 'character'
-            ORDER BY m.created_at DESC
-            LIMIT 100
-        """
-        results = execute_query(query)
+        # Use messages_with_names view or query with explicit type casting
+        try:
+            # First try to use pre-created view for faster performance
+            query = """
+                SELECT * FROM messages_with_names
+                ORDER BY created_at DESC
+                LIMIT 100
+            """
+            results = execute_query(query)
+        except Exception:
+            # If view not found, use full query with explicit type casting
+            query = """
+                SELECT m.id, m.sender_id, m.sender_type, m.recipient_id, m.recipient_type, 
+                       m.content, m.emotion, m.created_at,
+                       CASE 
+                           WHEN m.sender_type = 'user' AND u1.username IS NOT NULL THEN u1.username::text
+                           WHEN m.sender_type = 'character' AND c1.name IS NOT NULL THEN c1.name::text
+                           ELSE m.sender_id::text 
+                       END as sender_name,
+                       CASE 
+                           WHEN m.recipient_type = 'user' AND u2.username IS NOT NULL THEN u2.username::text
+                           WHEN m.recipient_type = 'character' AND c2.name IS NOT NULL THEN c2.name::text
+                           ELSE m.recipient_id::text 
+                       END as recipient_name
+                FROM messages m
+                LEFT JOIN users u1 ON m.sender_id::text = u1.user_id::text AND m.sender_type = 'user'
+                LEFT JOIN characters c1 ON m.sender_id::text = c1.id::text AND m.sender_type = 'character'
+                LEFT JOIN users u2 ON m.recipient_id::text = u2.user_id::text AND m.recipient_type = 'user'
+                LEFT JOIN characters c2 ON m.recipient_id::text = c2.id::text AND m.recipient_type = 'character'
+                ORDER BY m.created_at DESC
+                LIMIT 100
+            """
+            results = execute_query(query)
+        
         messages_list = []
-        for row in results:
-            message = {}
-            for key in row._mapping:
-                message[key] = row._mapping[key]
-            messages_list.append(message)
+        if results:
+            for row in results:
+                # Convert Row object to dict safely, handling UUID objects
+                message = {}
+                for key in row._mapping:
+                    # Convert all UUIDs to strings to avoid subscripting issues
+                    value = row._mapping[key]
+                    if hasattr(value, 'hex'):  # Check if it's a UUID
+                        message[key] = str(value)
+                    else:
+                        message[key] = value
+                messages_list.append(message)
         
         return render_template('messages/list.html', messages=messages_list)
     except Exception as e:
         logger.error(f"Error loading messages: {e}")
-        flash(f'Ошибка при загрузке сообщений: {str(e)}', 'danger')
+        flash(f'Error loading messages: {str(e)}', 'danger')
         return render_template('messages/list.html', messages=[])
 
 @app.route('/settings')
@@ -566,7 +586,7 @@ def memories():
             # Get memories with character names - don't filter by user ID
             cursor.execute("""
                 SELECT m.id, m.character_id, c.name as character_name, 
-                       m.content, m.importance,
+                       m.memory_type, m.category, m.content, m.importance,
                        m.user_id, m.created_at
                 FROM memory_entries m
                 LEFT JOIN characters c ON c.id::text = m.character_id::text
@@ -613,7 +633,7 @@ def character_memories(character_id):
             
             # Get memories for this character - adjusting columns to match table schema
             cursor.execute("""
-                SELECT id, content, importance, user_id, created_at
+                SELECT id, memory_type, category, content, importance, user_id, created_at
                 FROM memory_entries
                 WHERE character_id::text = %s
                 ORDER BY created_at DESC
@@ -637,18 +657,37 @@ def add_memory():
         content = request.form.get('content')
         importance = request.form.get('importance', 5)
         user_id = request.form.get('user_id')
+        memory_type = request.form.get('memory_type')  # Get memory_type from form
+        
+        # Make user_id optional - if not provided or not valid, use NULL
+        sql_query = ""
+        sql_params = []
+        
+        # If user_id is provided, include it in the query
+        if user_id and user_id.strip():
+            sql_query = """
+                INSERT INTO memory_entries 
+                (id, character_id, user_id, type, content, importance, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            sql_params = [
+                str(uuid.uuid4()), character_id, user_id, memory_type, content, importance, datetime.now()
+            ]
+        else:
+            # If no user_id provided, insert without it
+            sql_query = """
+                INSERT INTO memory_entries 
+                (id, character_id, type, content, importance, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            sql_params = [
+                str(uuid.uuid4()), character_id, memory_type, content, importance, datetime.now()
+            ]
         
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO memory_entries 
-                    (id, character_id, content, importance, user_id, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
-                    str(uuid.uuid4()), character_id, 
-                    content, importance, user_id, datetime.now()
-                ))
+                cursor.execute(sql_query, sql_params)
                 conn.commit()
                 
             flash("Memory added successfully", "success")
@@ -771,27 +810,31 @@ def add_character():
             age = request.form.get('age', type=int)
             gender = request.form.get('gender')
             background = request.form.get('background')
-            personality_traits = request.form.getlist('personality_traits') or []
+            
+            # Handle personality traits and interests properly
+            personality_traits = request.form.get('personality_traits', '')
+            interests = request.form.get('interests', '')
+            
+            # Convert string to list if needed
             if isinstance(personality_traits, str):
                 personality_traits = [trait.strip() for trait in personality_traits.split(',') if trait.strip()]
             
-            interests = request.form.getlist('interests') or []
             if isinstance(interests, str):
                 interests = [interest.strip() for interest in interests.split(',') if interest.strip()]
             
             # Generate a UUID for the new character
             character_id = str(uuid.uuid4())
             
-            # Insert the character into the database
+            # Insert the character into the database with proper casting to JSONB
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO characters (id, name, age, gender, background, 
                                            personality, interests, created_at) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
                 """, (
                     character_id, name, age, gender, background, 
-                    personality_traits, interests, datetime.now()
+                    json.dumps(personality_traits), json.dumps(interests), datetime.now()
                 ))
                 conn.commit()
             

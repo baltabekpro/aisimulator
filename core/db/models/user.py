@@ -19,6 +19,7 @@ class User(Base):
     email = Column(String(100), nullable=False, unique=True)
     password_hash = Column(String(255), nullable=False)  # Changed from hashed_password to match the database schema
     name = Column(String(100), nullable=True)  # This is the column that was missing
+    external_id = Column(String(100), nullable=True, index=True)  # Для хранения идентификатора из внешних систем (OAuth)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

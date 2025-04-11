@@ -185,60 +185,98 @@ async def add_memory(
     current_user = Depends(get_current_admin_user)
 ):
     """Add a new memory"""
-    # Get character details
-    character = db.execute(text("""
-        SELECT id FROM characters WHERE id::text = :character_id
-    """), {"character_id": character_id}).fetchone()
+    import logging
+    logger = logging.getLogger(__name__)
     
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
-    
-    # Get any user associated with this character
-    user = db.execute(text("""
-        SELECT DISTINCT sender_id 
-        FROM messages 
-        WHERE recipient_id::text = :character_id AND sender_type = 'user'
-        LIMIT 1
-    """), {"character_id": character_id}).fetchone()
-    
-    if not user:
-        # Try the other direction
-        user = db.execute(text("""
-            SELECT DISTINCT recipient_id 
+    try:
+        # Get character details
+        character = db.execute(text("""
+            SELECT id FROM characters WHERE id::text = :character_id
+        """), {"character_id": character_id}).fetchone()
+        
+        if not character:
+            # Try looking in the ai_partners table as fallback
+            character = db.execute(text("""
+                SELECT id FROM ai_partners WHERE id::text = :character_id
+            """), {"character_id": character_id}).fetchone()
+            
+        if not character:
+            raise HTTPException(status_code=404, detail="Character not found")
+        
+        # Get any user associated with this character
+        user_result = db.execute(text("""
+            SELECT DISTINCT sender_id 
             FROM messages 
-            WHERE sender_id::text = :character_id AND recipient_type = 'user'
+            WHERE recipient_id::text = :character_id AND sender_type = 'user'
             LIMIT 1
         """), {"character_id": character_id}).fetchone()
-    
-    user_id = user[0] if user else uuid.uuid4()
-    
-    # Add the memory
-    memory_id = str(uuid.uuid4())
-    timestamp = datetime.now().isoformat()
-    
-    db.execute(text("""
-        INSERT INTO memory_entries (
-            id, character_id, user_id, memory_type, category, content, 
-            importance, is_active, created_at, updated_at
-        ) VALUES (
-            :id, :character_id, :user_id, :memory_type, :category, :content,
-            :importance, TRUE, :created_at, :updated_at
-        )
-    """), {
-        "id": memory_id,
-        "character_id": character_id,
-        "user_id": str(user_id),
-        "memory_type": memory_type,
-        "category": category,
-        "content": content,
-        "importance": importance,
-        "created_at": timestamp,
-        "updated_at": timestamp
-    })
-    
-    db.commit()
-    
-    return RedirectResponse(url=f"/memories/character/{character_id}", status_code=303)
+        
+        user_id = None
+        if user_result:
+            user_id = str(user_result[0])
+            logger.info(f"Found associated user: {user_id}")
+        else:
+            # Try the other direction
+            user_result = db.execute(text("""
+                SELECT DISTINCT recipient_id 
+                FROM messages 
+                WHERE sender_id::text = :character_id AND recipient_type = 'user'
+                LIMIT 1
+            """), {"character_id": character_id}).fetchone()
+            
+            if user_result:
+                user_id = str(user_result[0])
+                logger.info(f"Found associated user (recipient): {user_id}")
+        
+        # If still no user found, get the first admin user as a fallback
+        if not user_id:
+            admin_user = db.execute(text("""
+                SELECT id FROM users WHERE is_admin = TRUE LIMIT 1
+            """)).fetchone()
+            
+            if admin_user:
+                user_id = str(admin_user[0])
+                logger.info(f"Using admin user as fallback: {user_id}")
+            else:
+                # Last resort: create a new UUID for user_id
+                user_id = str(uuid.uuid4())
+                logger.info(f"Generated new UUID for user_id: {user_id}")
+        
+        # Add the memory
+        memory_id = str(uuid.uuid4())
+        timestamp = datetime.now().isoformat()
+        
+        logger.info(f"Creating memory with ID: {memory_id}, character_id: {character_id}, user_id: {user_id}")
+        
+        db.execute(text("""
+            INSERT INTO memory_entries (
+                id, character_id, user_id, memory_type, category, content, 
+                importance, is_active, created_at, updated_at
+            ) VALUES (
+                :id, :character_id, :user_id, :memory_type, :category, :content,
+                :importance, TRUE, :created_at, :updated_at
+            )
+        """), {
+            "id": memory_id,
+            "character_id": character_id,
+            "user_id": user_id,  # Ensured this is always a string
+            "memory_type": memory_type,
+            "category": category,
+            "content": content,
+            "importance": importance,
+            "created_at": timestamp,
+            "updated_at": timestamp
+        })
+        
+        db.commit()
+        logger.info(f"Memory created successfully with ID: {memory_id}")
+        
+        return RedirectResponse(url=f"/memories/character/{character_id}", status_code=303)
+    except Exception as e:
+        logger.error(f"Error adding memory: {str(e)}")
+        db.rollback()
+        # Return to memories list with error
+        return RedirectResponse(url="/memories", status_code=303)
 
 @router.post("/delete/{memory_id}")
 async def delete_memory(

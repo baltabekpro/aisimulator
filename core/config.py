@@ -55,6 +55,26 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
     
+    # Настройки для Apple OAuth
+    APPLE_CLIENT_ID: Optional[str] = os.environ.get("APPLE_CLIENT_ID")
+    APPLE_REDIRECT_URI: Optional[str] = os.environ.get("APPLE_REDIRECT_URI")
+    APPLE_KEY_ID: Optional[str] = os.environ.get("APPLE_KEY_ID")
+    APPLE_TEAM_ID: Optional[str] = os.environ.get("APPLE_TEAM_ID")
+    APPLE_BUNDLE_ID: Optional[str] = os.environ.get("APPLE_BUNDLE_ID", "com.yourapp.identifier")
+    APPLE_AUTH_KEY_PATH: str = os.environ.get("APPLE_AUTH_KEY_PATH", "keys/AuthKey_Apple.p8")
+    APPLE_USE_SANDBOX: bool = os.environ.get("APPLE_USE_SANDBOX", "True").lower() == "true"
+    
+    # URL базовый для сервиса
+    BASE_URL: str = os.environ.get("BASE_URL", "http://localhost:8000")
+    
+    # Настройки хранилища файлов
+    STORAGE_TYPE: str = os.environ.get("STORAGE_TYPE", "local")  # local, s3, minio
+    S3_ENDPOINT: Optional[str] = os.environ.get("S3_ENDPOINT")
+    S3_ACCESS_KEY: Optional[str] = os.environ.get("S3_ACCESS_KEY")
+    S3_SECRET_KEY: Optional[str] = os.environ.get("S3_SECRET_KEY")
+    S3_BUCKET_NAME: str = os.environ.get("S3_BUCKET_NAME", "user-files")
+    S3_REGION: Optional[str] = os.environ.get("S3_REGION")
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

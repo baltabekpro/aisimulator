@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 
@@ -24,3 +24,29 @@ class User(UserBase):
     
     class Config:
         from_attributes = True
+
+class UserProfileBase(BaseModel):
+    """Базовая модель пользовательского профиля"""
+    name: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    location: Optional[str] = None
+    bio: Optional[str] = None
+    interests: List[str] = Field(default_factory=list)
+    photos: List[str] = Field(default_factory=list)
+    
+    # Настройки предпочтений для алгоритма сватовства
+    matching_preferences: Dict[str, Any] = Field(default_factory=dict)
+
+class UserProfileUpdate(UserProfileBase):
+    """Модель для обновления пользовательского профиля"""
+    pass
+
+class UserProfileResponse(UserProfileBase):
+    """Модель ответа с данными пользовательского профиля"""
+    user_id: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
