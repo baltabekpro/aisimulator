@@ -188,7 +188,7 @@ PGPASSWORD=postgres psql "${DATABASE_URL:-postgresql://aibot:postgres@postgres:5
 -- Create or replace the view used by admin panel for memories
 CREATE OR REPLACE VIEW admin_memories_view AS
 SELECT m.id, m.character_id, c.name as character_name, 
-       m.type, m.memory_type, m.category, m.content, m.importance,
+       m.type, m.memory_type, COALESCE(m.category, 'general') as category, m.content, m.importance,
        m.user_id, m.created_at
 FROM memory_entries m
 LEFT JOIN characters c ON c.id::text = m.character_id::text
