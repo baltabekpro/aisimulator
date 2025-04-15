@@ -223,10 +223,18 @@ def get_user_balance(
     """
     Получить текущий баланс звезд пользователя
     """
-    # Здесь должна быть логика получения баланса пользователя из БД
-    # В моковой реализации возвращаем фиксированное значение
+    user_id = str(current_user.user_id)
+    
+    # Используем сервис для получения реального баланса пользователя из БД
+    balance = profile_service.get_user_stars_balance(db, user_id)
+    
+    if balance is None:
+        # Если баланс не найден, инициализируем с нулевым значением
+        balance = 0
+        profile_service.update_user_stars_balance(db, user_id, balance)
+    
     return {
-        "balance": 100,  # Заглушка для реализации
+        "balance": balance,
         "currency": "stars",
         "last_updated": datetime.now().isoformat()
     }

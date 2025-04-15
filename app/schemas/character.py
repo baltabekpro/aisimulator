@@ -17,9 +17,15 @@ class CharacterCreate(CharacterBase):
 class CharacterInteractionRequest(BaseModel):
     character_id: str = Field(..., description="ID of the character to interact with")
 
+class CharacterPhoto(BaseModel):
+    id: str
+    url: str
+    is_primary: bool = False
+
 class CharacterFeedResponse(CharacterBase):
     id: str
     avatar_url: Optional[str] = None
+    photos: List[CharacterPhoto] = []  # Добавлено поле для списка фотографий
     bio_summary: Optional[str] = None
     match_percentage: Optional[float] = None
     
@@ -29,6 +35,7 @@ class CharacterFeedResponse(CharacterBase):
 class CharacterResponse(CharacterBase):
     id: str
     avatar_url: Optional[str] = None
+    photos: List[CharacterPhoto] = []  # Добавлено поле для списка фотографий
     bio_summary: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
