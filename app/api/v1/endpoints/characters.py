@@ -8,7 +8,8 @@ from app.services.character_service import (
     get_character_by_id,
     like_character,
     dislike_character,
-    superlike_character
+    superlike_character,
+    get_character_photos
 )
 from app.schemas.user import User
 import logging
@@ -29,6 +30,18 @@ def get_feed(
     """
     try:
         characters = get_character_feed(db, current_user.id, limit, offset)
+        
+        # Добавляем фотографии к каждому персонажу
+        for character in characters:
+            character_id = character.get("id")
+            if character_id:
+                photos = get_character_photos(character_id)
+                character["photos"] = photos
+                
+                # Устанавливаем avatar_url как первую фотографию, если она не задана
+                if not character.get("avatar_url") and photos:
+                    character["avatar_url"] = photos[0]["url"]
+        
         return characters
     except Exception as e:
         logger.error(f"Error retrieving character feed: {e}")
@@ -46,6 +59,15 @@ def get_character(
     character = get_character_by_id(db, character_id)
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Добавляем фотографии персонажа
+    photos = get_character_photos(character_id)
+    character["photos"] = photos
+    
+    # Устанавливаем avatar_url как первую фотографию, если она не задана
+    if not character.get("avatar_url") and photos:
+        character["avatar_url"] = photos[0]["url"]
+    
     return character
 
 @router.get("/me", response_model=CharacterResponse)

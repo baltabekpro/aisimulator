@@ -14,41 +14,28 @@ class AIPartner(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False)
+    age = Column(Integer, nullable=True)
+    gender = Column(String(20), nullable=True, default="female")
+    personality_traits = Column(Text, nullable=True)  # JSON as text
+    interests = Column(Text, nullable=True)  # JSON as text
+    background = Column(Text, nullable=True)
+    current_emotion = Column(String(50), nullable=True, default="neutral")
     
     # Columns that may not exist in the actual database will be handled as properties
-    # Only include what's definitely in the database
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Define properties for columns that might be accessed but don't exist in DB
+    # Define a property for compatibility with character_id in other places
+    @property
+    def character_id(self):
+        return self.id
+    
+    # Keep partner_id property for backward compatibility
     @property
     def partner_id(self):
         return self.id
-        
-    @property
-    def personality_traits(self):
-        return None
     
-    @property
-    def interests(self):
-        return None
-    
-    @property
-    def background(self):
-        return None
-    
-    @property
-    def current_emotion(self):
-        return "neutral"
-    
-    @property
-    def age(self):
-        return None
-        
-    @property
-    def gender(self):
-        return "female"  # Default value
-    
+    # Fetishes may still be accessed but isn't in our schema    
     @property
     def fetishes(self):
         return None

@@ -26,9 +26,14 @@
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label for="user_id" class="form-label">ID Пользователя (необязательно)</label>
-                        <input type="text" class="form-control" id="user_id" name="user_id" placeholder="UUID или ID Telegram">
-                        <small class="text-muted">Оставьте пустым, чтобы воспоминание было доступно всем пользователям</small>
+                        <label for="user_id" class="form-label">Пользователь</label>
+                        <select class="form-control" id="user_id" name="user_id">
+                            <option value="00000000-0000-0000-0000-000000000000">Системный пользователь (по умолчанию)</option>
+                            {% for user in users %}
+                            <option value="{{ user.user_id }}">{{ user.username }}{% if user.name %} ({{ user.name }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Выберите пользователя, к которому относится воспоминание</small>
                     </div>
                 </div>
 

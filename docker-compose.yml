@@ -100,8 +100,7 @@ services:
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=admin_password
     ports:
-      - "5000:5000"  # Публичный порт админ-панели
-    # Use direct startup to avoid script execution issues
+      - "5001:5000"
     command: >
       bash -c "
         echo 'Starting Admin Panel...' &&

@@ -129,7 +129,7 @@ async def character_memories(
             SELECT 
                 m.id, 
                 m.user_id,
-                u.username as user_name,
+                u.name as user_name,
                 m.memory_type, 
                 m.category, 
                 m.content, 
@@ -137,7 +137,7 @@ async def character_memories(
                 m.is_active,
                 m.created_at
             FROM memory_entries_view m
-            LEFT JOIN users u ON u.id::text = m.user_id::text
+            LEFT JOIN users u ON u.user_id::text = m.user_id::text
             WHERE m.character_id::text = :character_id
             ORDER BY m.importance DESC, m.created_at DESC
         """), {"character_id": character_id}).fetchall()

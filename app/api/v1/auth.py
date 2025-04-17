@@ -293,14 +293,14 @@ async def register(
     
     # Create tokens for the new user
     tokens = create_tokens(
-        subject=str(user.id),
+        subject=str(user.user_id),
         is_admin=user.is_admin,
         debug=settings.debug
     )
     
     return {
         **tokens,
-        "user_id": str(user.id),
+        "user_id": str(user.user_id),
         "is_admin": user.is_admin
     }
 
@@ -312,7 +312,7 @@ async def get_current_user_info(
     Get current user info
     """
     return {
-        "id": str(current_user.id),
+        "id": str(current_user.user_id),
         "email": current_user.email,
         "name": current_user.name,
         "is_admin": current_user.is_admin,

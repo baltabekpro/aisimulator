@@ -12,14 +12,16 @@ class Message(Base):
     """
     __tablename__ = "messages"
     
+    # Используем String вместо UUID для более совместимого представления в разных СУБД
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    sender_id = Column(UUID(as_uuid=True), nullable=False)
+    
+    # Используем String вместо UUID для лучшей совместимости между PostgreSQL и SQLite
+    sender_id = Column(String(36), nullable=False)
     sender_type = Column(String(20), nullable=False)  # 'user' или 'character'
-    recipient_id = Column(UUID(as_uuid=True), nullable=False)
+    recipient_id = Column(String(36), nullable=False)
     recipient_type = Column(String(20), nullable=False)  # 'user' или 'character'
     content = Column(Text, nullable=False)
     emotion = Column(String(50), nullable=True)  # Эмоциональный тон сообщения
-    # Remove conversation_id field completely as it doesn't exist in the database
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     is_read = Column(Boolean, default=False)

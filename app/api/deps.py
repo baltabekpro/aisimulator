@@ -52,7 +52,7 @@ def get_current_user(
     if api_key and validate_api_key(api_key):
         # Create a temporary User object for API access
         return SimpleNamespace(
-            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
             username="api_user",
             is_active=True,
             is_superuser=False
@@ -91,7 +91,7 @@ def get_current_user(
         # Use a dummy user for development if needed
         if settings.debug and (token == "test_token" or user_id == "test_user_id"):
             return SimpleNamespace(
-                id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+                user_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
                 username="test_user",
                 email="test@example.com",
                 is_active=True,
@@ -99,7 +99,7 @@ def get_current_user(
             )
             
         # Get user from database if not in development mode or using real token
-        user = db.query(User).filter(User.id == user_id).first()
+        user = db.query(User).filter(User.user_id == user_id).first()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -118,7 +118,7 @@ def get_current_user(
         # For development, return a test user if DEBUG mode is enabled
         if settings.debug:
             return SimpleNamespace(
-                id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+                user_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
                 username="test_user",
                 email="test@example.com",
                 is_active=True,
@@ -130,6 +130,97 @@ def get_current_user(
             detail=f"Could not validate credentials: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+def get_current_user_optional(
+    db: Session = Depends(get_db),
+    token: Optional[str] = Depends(oauth2_scheme),
+    api_key: Optional[str] = Depends(get_api_key)
+) -> Optional[Union[User, SimpleNamespace]]:
+    """
+    Get current user from JWT token, but don't raise exceptions if token is invalid or missing.
+    Returns None if no valid token is provided.
+    """
+    # Check if API key is provided and valid
+    if api_key and validate_api_key(api_key):
+        # Create a temporary User object for API access
+        return SimpleNamespace(
+            user_id=uuid.uuid4(),
+            username="api_user",
+            is_active=True,
+            is_superuser=False
+        )
+    
+    # If no token is provided, return None (no authentication)
+    if not token:
+        return None
+    
+    try:
+        # Decode the JWT token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        # Extract user ID from token
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+            
+        # Check token expiration
+        token_exp = payload.get("exp")
+        if token_exp and datetime.fromtimestamp(token_exp) < datetime.now():
+            return None
+            
+        # Use a dummy user for development if needed
+        if settings.debug and (token == "test_token" or user_id == "test_user_id"):
+            return SimpleNamespace(
+                user_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+                username="test_user",
+                email="test@example.com",
+                is_active=True,
+                is_superuser=True
+            )
+            
+        # Get user from database if not in development mode or using real token
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user or not user.is_active:
+            return None
+            
+        return user
+        
+    except (jwt.exceptions.DecodeError, jwt.exceptions.InvalidTokenError, ValidationError):
+        # For development, return a test user if DEBUG mode is enabled
+        if settings.debug:
+            return SimpleNamespace(
+                user_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+                username="test_user",
+                email="test@example.com",
+                is_active=True,
+                is_superuser=True
+            )
+        
+        return None
+
+def get_current_user_or_api_key(
+    db: Session = Depends(get_db),
+    token: Optional[str] = Depends(oauth2_scheme),
+    api_key: Optional[str] = Depends(get_api_key)
+) -> Union[User, SimpleNamespace, None]:
+    """
+    Get current user from JWT token or API key.
+    If API key is valid, return a SimpleNamespace with API user properties.
+    If token is valid, return the user.
+    If neither is valid, return None.
+    """
+    # Check if API key is provided and valid
+    if api_key and validate_api_key(api_key):
+        # Create a temporary User object for API access
+        return SimpleNamespace(
+            user_id=uuid.uuid4(),
+            username="api_user",
+            is_active=True,
+            is_superuser=False
+        )
+    
+    # Try to get user from token
+    return get_current_user_optional(db=db, token=token, api_key=None)
 
 def get_current_active_user(current_user = Depends(get_current_user)):
     """

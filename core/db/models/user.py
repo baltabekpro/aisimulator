@@ -25,7 +25,17 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Relationships will be defined here if needed
+    # Добавляем property для совместимости с другими моделями
+    @property
+    def id(self):
+        """Для совместимости с общепринятым именованием id"""
+        return self.user_id
+    
+    # Для совместимости с методами API, которые ожидают строковое представление
+    @property
+    def user_id_str(self):
+        """Возвращает строковое представление user_id"""
+        return str(self.user_id) if self.user_id else None
     
     def set_password(self, password: str):
         """Set the user's password hash"""

@@ -440,7 +440,7 @@ def add_external_id_to_users():
 
 def create_admin_message_view():
     """Create or replace admin message view with correct type casting."""
-    logger.info("Creating or replacing admin message view with proper type casting...")
+    logger.info("Creating or replacing admin message view with portable type casting...")
     
     try:
         with engine.begin() as conn:
@@ -451,30 +451,57 @@ def create_admin_message_view():
             except Exception as e:
                 logger.warning(f"Could not drop admin_messages_view: {e}")
             
-            # Create the view with proper type casting
-            create_view_sql = """
-            CREATE OR REPLACE VIEW admin_messages_view AS
-            SELECT m.id, m.sender_id, m.sender_type, m.recipient_id, m.recipient_type,
-                   m.content, m.emotion, m.created_at,
-                   CASE 
-                       WHEN m.sender_type = 'user' AND u1.username IS NOT NULL THEN u1.username::text
-                       WHEN m.sender_type = 'character' AND c1.name IS NOT NULL THEN c1.name::text
-                       ELSE m.sender_id::text
-                   END as sender_name,
-                   CASE 
-                       WHEN m.recipient_type = 'user' AND u2.username IS NOT NULL THEN u2.username::text
-                       WHEN m.recipient_type = 'character' AND c2.name IS NOT NULL THEN c2.name::text
-                       ELSE m.recipient_id::text
-                   END as recipient_name
-            FROM messages m
-            LEFT JOIN users u1 ON m.sender_id::text = u1.user_id::text AND m.sender_type = 'user'
-            LEFT JOIN characters c1 ON m.sender_id::text = c1.id::text AND m.sender_type = 'character'
-            LEFT JOIN users u2 ON m.recipient_id::text = u2.user_id::text AND m.recipient_type = 'user'
-            LEFT JOIN characters c2 ON m.recipient_id::text = c2.id::text AND m.recipient_type = 'character'
-            """
+            # Определяем диалект базы данных
+            is_postgres = 'postgresql' in str(engine.url).lower()
+            
+            # Создаём SQL запрос в зависимости от типа базы данных
+            if is_postgres:
+                # PostgreSQL поддерживает приведение типов через ::
+                create_view_sql = """
+                CREATE OR REPLACE VIEW admin_messages_view AS
+                SELECT m.id, m.sender_id, m.sender_type, m.recipient_id, m.recipient_type,
+                       m.content, m.emotion, m.created_at,
+                       CASE 
+                           WHEN m.sender_type = 'user' AND u1.username IS NOT NULL THEN u1.username::text
+                           WHEN m.sender_type = 'character' AND c1.name IS NOT NULL THEN c1.name::text
+                           ELSE m.sender_id::text
+                       END as sender_name,
+                       CASE 
+                           WHEN m.recipient_type = 'user' AND u2.username IS NOT NULL THEN u2.username::text
+                           WHEN m.recipient_type = 'character' AND c2.name IS NOT NULL THEN c2.name::text
+                           ELSE m.recipient_id::text
+                       END as recipient_name
+                FROM messages m
+                LEFT JOIN users u1 ON m.sender_id::text = u1.user_id::text AND m.sender_type = 'user'
+                LEFT JOIN characters c1 ON m.sender_id::text = c1.id::text AND m.sender_type = 'character'
+                LEFT JOIN users u2 ON m.recipient_id::text = u2.user_id::text AND m.recipient_type = 'user'
+                LEFT JOIN characters c2 ON m.recipient_id::text = c2.id::text AND m.recipient_type = 'character'
+                """
+            else:
+                # SQLite и другие базы данных без поддержки ::text - используем CAST или строковые функции
+                create_view_sql = """
+                CREATE OR REPLACE VIEW admin_messages_view AS
+                SELECT m.id, m.sender_id, m.sender_type, m.recipient_id, m.recipient_type,
+                       m.content, m.emotion, m.created_at,
+                       CASE 
+                           WHEN m.sender_type = 'user' AND u1.username IS NOT NULL THEN u1.username
+                           WHEN m.sender_type = 'character' AND c1.name IS NOT NULL THEN c1.name
+                           ELSE m.sender_id
+                       END as sender_name,
+                       CASE 
+                           WHEN m.recipient_type = 'user' AND u2.username IS NOT NULL THEN u2.username
+                           WHEN m.recipient_type = 'character' AND c2.name IS NOT NULL THEN c2.name
+                           ELSE m.recipient_id
+                       END as recipient_name
+                FROM messages m
+                LEFT JOIN users u1 ON m.sender_id = u1.user_id AND m.sender_type = 'user'
+                LEFT JOIN characters c1 ON m.sender_id = c1.id AND m.sender_type = 'character'
+                LEFT JOIN users u2 ON m.recipient_id = u2.user_id AND m.recipient_type = 'user'
+                LEFT JOIN characters c2 ON m.recipient_id = c2.id AND m.recipient_type = 'character'
+                """
             
             conn.execute(sa.text(create_view_sql))
-            logger.info("Successfully created admin_messages_view with proper type casting")
+            logger.info("Successfully created admin_messages_view with proper type casting for the current database type")
     except Exception as e:
         logger.error(f"Error creating admin message view: {e}")
 

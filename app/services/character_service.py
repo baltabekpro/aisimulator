@@ -230,3 +230,57 @@ def superlike_character(db: Session, user_id: str, character_id: str) -> Dict[st
         db.rollback()
         logger.error(f"Error superliking character: {e}")
         return {"is_match": False, "error": str(e)}
+
+def generate_character_photo_url(character_id: str, photo_number: int = 1) -> str:
+    """
+    Генерирует URL для фотографии персонажа.
+    Использует MinIO для хранения файлов.
+    
+    Args:
+        character_id: ID персонажа
+        photo_number: Номер фотографии
+        
+    Returns:
+        URL фотографии
+    """
+    from app.config import settings
+    import os
+    
+    # Базовый URL для доступа к MinIO
+    # В production это будет https://storage.yourdomain.com или похожий URL
+    base_url = os.getenv("MINIO_PUBLIC_URL", "http://localhost:9000")
+    bucket = os.getenv("MINIO_BUCKET", "default")
+    
+    # Формируем путь к фотографии в формате characters/{character_id}/{photo_number}.jpg
+    photo_path = f"characters/{character_id}/{photo_number}.jpg"
+    
+    # Полный URL
+    url = f"{base_url}/{bucket}/{photo_path}"
+    
+    return url
+
+def get_character_photos(character_id: str, count: int = 3) -> List[Dict[str, Any]]:
+    """
+    Получает список фотографий персонажа.
+    
+    Args:
+        character_id: ID персонажа
+        count: Количество фотографий
+        
+    Returns:
+        Список фотографий в формате [{"id": "...", "url": "...", "is_primary": True/False}]
+    """
+    photos = []
+    
+    for i in range(1, count + 1):
+        photo_id = f"{character_id}_photo_{i}"
+        url = generate_character_photo_url(character_id, i)
+        is_primary = (i == 1)  # Первая фотография считается основной
+        
+        photos.append({
+            "id": photo_id,
+            "url": url,
+            "is_primary": is_primary
+        })
+    
+    return photos

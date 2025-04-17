@@ -355,11 +355,14 @@ async def send_message(
     """
     Send a message to an AI character and get a response
     """
-    # Change from partner_id to id to match the characters table
+    # Унифицированный подход к поиску персонажа
+    character = None
+    
+    # Сначала ищем в ai_partners таблице
     character = db.query(AIPartner).filter(AIPartner.id == character_id).first()
+    
+    # Если не нашли, пробуем в characters таблице через SQL
     if not character:
-        # Try raw SQL as fallback
-        from sqlalchemy import text
         try:
             raw_character = db.execute(
                 text("SELECT * FROM characters WHERE id = :id"),
@@ -425,20 +428,22 @@ async def send_message(
     message_history = []
     if current_user:
         user_id = current_user.user_id
-        char_id = character.partner_id
+        char_id = character.id  # Используем просто id вместо partner_id
 
+        # Улучшенный запрос для поиска сообщений между пользователем и персонажем
         recent_messages = db.query(Message).filter(
-            ((Message.sender_id == char_id) and (Message.recipient_id == user_id)) or
-            ((Message.sender_id == user_id) and (Message.recipient_id == char_id))
+            ((Message.sender_id == str(char_id)) & (Message.recipient_id == str(user_id))) | 
+            ((Message.sender_id == str(user_id)) & (Message.recipient_id == str(char_id)))
         ).order_by(Message.created_at.desc()).limit(10).all()
 
         for msg in reversed(recent_messages):
-            sender_type = "user" if msg.sender_id == user_id else "character"
+            sender_type = "user" if msg.sender_id == str(user_id) else "character"
             message_history.append({
                 "sender_type": sender_type,
                 "content": msg.content,
                 "emotion": msg.emotion or "neutral"
             })
+    
     context = {
         "character": character_info,
         "relationship": relationship_info,
@@ -466,9 +471,9 @@ async def send_message(
     if current_user:
         user_id = current_user.user_id
         user_message = Message(
-            sender_id=user_id,
+            sender_id=str(user_id),
             sender_type="user",
-            recipient_id=character.partner_id,
+            recipient_id=str(character.id),  # Используем просто id вместо partner_id
             recipient_type="character",
             content=message,
             emotion="neutral"
@@ -505,9 +510,9 @@ async def send_message(
             if is_multi_message:
                 for i, msg in enumerate(multi_messages):
                     character_message = Message(
-                        sender_id=character.partner_id,
+                        sender_id=str(character.id),  # Используем просто id вместо partner_id
                         sender_type="character",
-                        recipient_id=current_user.user_id,
+                        recipient_id=str(current_user.user_id),
                         recipient_type="user",
                         content=msg.get("text", ""),
                         emotion=msg.get("emotion", "neutral")
@@ -515,9 +520,9 @@ async def send_message(
                     db.add(character_message)
             else:
                 character_message = Message(
-                    sender_id=character.partner_id,
+                    sender_id=str(character.id),  # Используем просто id вместо partner_id
                     sender_type="character",
-                    recipient_id=current_user.user_id,
+                    recipient_id=str(current_user.user_id),
                     recipient_type="user",
                     content=main_text,
                     emotion=emotion
@@ -1289,8 +1294,8 @@ async def get_character_memories(
             # Try direct comparison as UUID
             try:
                 # Add this condition if the user_id is a valid UUID
-                import uuid
-                uuid_obj = uuid.UUID(user_id)
+                import uuid as uuid_module  # Import as alias to avoid conflicts
+                uuid_obj = uuid_module.UUID(user_id)
                 user_id_condition.append("user_id = :user_id::uuid")
             except ValueError:
                 # Not a valid UUID, skip this condition
@@ -1316,6 +1321,9 @@ async def get_character_memories(
         
         # 4. Try telegram_id if provided
         if telegram_id:
+            # Import uuid module for telegram ID handling
+            import uuid as uuid_module  # Import as alias to avoid conflicts
+            
             user_id_condition.append("user_id::text = :telegram_id")
             params["telegram_id"] = telegram_id
             
@@ -1333,7 +1341,7 @@ async def get_character_memories(
                 params["telegram_leading_zeros"] = f"%00{telegram_id}"
                 
                 # Generate a deterministic UUID based on telegram ID
-                telegram_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"telegram-{telegram_id}"))
+                telegram_uuid = str(uuid_module.uuid5(uuid_module.NAMESPACE_DNS, f"telegram-{telegram_id}"))
                 user_id_condition.append("user_id::text = :telegram_uuid")
                 params["telegram_uuid"] = telegram_uuid
                 

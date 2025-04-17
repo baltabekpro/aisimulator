@@ -366,6 +366,36 @@ async def chat_handler(message: types.Message, state: FSMContext):
             memory_data = response.get("memory", [])
             logger.info(f"Извлечены новые воспоминания: {len(memory_data)} записей")
             
+            # Получаем UUID для текущего пользователя Telegram
+            user_uuid = await get_user_uuid_for_telegram_id(message.from_user.id, character_id)
+            user_id_str = user_uuid[0] if isinstance(user_uuid, tuple) else user_uuid
+            logger.info(f"Использую UUID пользователя для сохранения памяти: {user_id_str}")
+            
+            # Добавляем сохранение в базу данных через API
+            for memory in memory_data:
+                if (isinstance(memory, dict) and "content" in memory):
+                    try:
+                        # Добавляем user_id, если его нет
+                        if "user_id" not in memory:
+                            memory["user_id"] = user_id_str
+                            
+                        # Отправляем запрос на создание памяти через API
+                        headers = {"Authorization": f"Bearer {API_KEY}"}
+                        memory_url = f"{API_BASE_URL}/chat/characters/{character_id}/memories"
+                        
+                        async with aiohttp.ClientSession() as session:
+                            async with session.post(
+                                memory_url,
+                                json=memory,
+                                headers=headers
+                            ) as memory_response:
+                                if memory_response.status == 200 or memory_response.status == 201:
+                                    logger.info(f"✅ Память успешно сохранена: {memory['content'][:50]}...")
+                                else:
+                                    logger.error(f"⚠️ Ошибка сохранения памяти: {memory_response.status}")
+                    except Exception as mem_error:
+                        logger.error(f"❌ Ошибка при сохранении памяти: {mem_error}")
+            
             memories_text = []
             for memory in memory_data:
                 if (isinstance(memory, dict) and "content" in memory):

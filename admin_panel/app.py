@@ -640,9 +640,30 @@ def character_memories(character_id):
             """, (character_id,))
             memories = cursor.fetchall()
             
+            # Get users list for the dropdown
+            cursor.execute("SELECT user_id, username, name FROM users ORDER BY username")
+            users = cursor.fetchall()
+            
+            # Add system user if needed
+            has_system_user = False
+            for user in users:
+                if str(user['user_id']) == '00000000-0000-0000-0000-000000000000':
+                    has_system_user = True
+                    break
+            
+            if not has_system_user:
+                # Prepare system user for the dropdown
+                system_user = {
+                    'user_id': '00000000-0000-0000-0000-000000000000',
+                    'username': 'system',
+                    'name': 'Системный пользователь'
+                }
+                users = [system_user] + list(users)
+            
         return render_template('memories/character.html', 
                               character=character,
-                              memories=memories)
+                              memories=memories,
+                              users=users)
     except Exception as e:
         logger.error(f"Error retrieving character memories: {e}")
         flash(f"Error retrieving character memories: {e}", "danger")
@@ -658,31 +679,36 @@ def add_memory():
         importance = request.form.get('importance', 5)
         user_id = request.form.get('user_id')
         memory_type = request.form.get('memory_type')  # Get memory_type from form
+        category = request.form.get('category', 'general')  # Get category or use default
         
-        # Make user_id optional - if not provided or not valid, use NULL
-        sql_query = ""
-        sql_params = []
+        # Generate a UUID for the memory
+        memory_id = str(uuid.uuid4())
         
-        # If user_id is provided, include it in the query
+        # Validate user_id if provided - must be valid UUID
         if user_id and user_id.strip():
-            sql_query = """
-                INSERT INTO memory_entries 
-                (id, character_id, user_id, type, content, importance, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            sql_params = [
-                str(uuid.uuid4()), character_id, user_id, memory_type, content, importance, datetime.now()
-            ]
+            try:
+                # Attempt to parse as UUID to validate format
+                uuid.UUID(user_id)
+            except ValueError:
+                # If not a valid UUID, log it and use system user instead
+                logger.warning(f"Invalid user_id format: {user_id}, using system user instead")
+                user_id = '00000000-0000-0000-0000-000000000000'
         else:
-            # If no user_id provided, insert without it
-            sql_query = """
-                INSERT INTO memory_entries 
-                (id, character_id, type, content, importance, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """
-            sql_params = [
-                str(uuid.uuid4()), character_id, memory_type, content, importance, datetime.now()
-            ]
+            # Use the standard system user UUID if no user_id provided
+            user_id = '00000000-0000-0000-0000-000000000000'
+            logger.info(f"No user_id provided, using system user ID: {user_id}")
+        
+        # Insert memory with all required fields
+        sql_query = """
+            INSERT INTO memory_entries 
+            (id, character_id, user_id, type, memory_type, category, content, importance, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        sql_params = [
+            memory_id, character_id, user_id, 
+            memory_type, memory_type,  # Set both type and memory_type to same value
+            category, content, importance, datetime.now()
+        ]
         
         try:
             with get_db_connection() as conn:
@@ -701,10 +727,31 @@ def add_memory():
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            # Get characters list
             cursor.execute("SELECT id, name FROM characters ORDER BY name")
             characters = cursor.fetchall()
+            
+            # Get users list
+            cursor.execute("SELECT user_id, username, name FROM users ORDER BY username")
+            users = cursor.fetchall()
+            
+            # Add system user if needed
+            has_system_user = False
+            for user in users:
+                if str(user['user_id']) == '00000000-0000-0000-0000-000000000000':
+                    has_system_user = True
+                    break
+            
+            if not has_system_user:
+                # Prepare system user for the dropdown
+                system_user = {
+                    'user_id': '00000000-0000-0000-0000-000000000000',
+                    'username': 'system',
+                    'name': 'Системный пользователь'
+                }
+                users = [system_user] + list(users)
         
-        return render_template('memories/add.html', characters=characters)
+        return render_template('memories/add.html', characters=characters, users=users)
     except Exception as e:
         logger.error(f"Error loading add memory form: {e}")
         flash(f"Error loading add memory form: {e}", "danger")
