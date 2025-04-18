@@ -13,10 +13,14 @@
         <h6 class="m-0 font-weight-bold text-primary">User Details</h6>
     </div>
     <div class="card-body">
-        <form method="post" action="{{ url_for('create_user') }}">
+        <form method="post" action="{{ url_for('create_user') }}" enctype="multipart/form-data">
             <div class="mb-3">
                 <label for="username" class="form-label">Username</label>
                 <input type="text" class="form-control" id="username" name="username" required>
+            </div>
+            <div class="mb-3">
+                <label for="avatar" class="form-label">Avatar</label>
+                <input type="file" class="form-control" id="avatar" name="avatar" accept="image/*">
             </div>
             <div class="mb-3">
                 <label for="email" class="form-label">Email</label>

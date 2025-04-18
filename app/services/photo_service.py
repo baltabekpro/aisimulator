@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from core.db.models.user_photo import UserPhoto
+from app.services.storage_service import delete_file
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +88,14 @@ def delete_photo(db: Session, user_id: str, photo_id: str) -> bool:
             logger.warning(f"Photo {photo_id} not found for user {user_id}")
             return False
         
+        # Delete file from storage
+        try:
+            bucket = settings.S3_BUCKET_NAME
+            delete_file(bucket, photo.filename)
+        except Exception as e:
+            logger.error(f"Error deleting file from storage: {e}")
+        
+        # Delete DB record
         db.delete(photo)
         db.commit()
         

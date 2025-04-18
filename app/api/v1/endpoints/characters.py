@@ -1,18 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Body, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Path, UploadFile, File, status
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from app.api.deps import get_db, get_current_user
-from app.schemas.character import CharacterResponse, CharacterFeedResponse, CharacterInteractionRequest
+from app.schemas.character import CharacterResponse, CharacterFeedResponse, CharacterInteractionRequest, CharacterAvatarResponse
 from app.services.character_service import (
     get_character_feed, 
     get_character_by_id,
     like_character,
     dislike_character,
     superlike_character,
-    get_character_photos
+    get_character_photos,
+    update_character_avatar
 )
 from app.schemas.user import User
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -157,3 +159,41 @@ def superlike_character_body(
     """
     result = superlike_character(db, current_user.id, interaction.character_id)
     return {"success": True, "is_match": result.get("is_match", False)}
+
+# Настройки загрузки фотографий персонажей
+MAX_PHOTO_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/jpg"]
+
+@router.post("/{character_id}/avatar", response_model=CharacterAvatarResponse)
+async def upload_character_avatar(
+    character_id: str = Path(..., description="Character ID"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> CharacterAvatarResponse:
+    """
+    Upload and update character avatar
+    """
+    # Проверка типа файла
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type. Allowed types: {', '.join(ALLOWED_CONTENT_TYPES)}"
+        )
+    # Проверка размера
+    file.file.seek(0, os.SEEK_END)
+    size = file.file.tell()
+    file.file.seek(0)
+    if size > MAX_PHOTO_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File size exceeds maximum allowable ({MAX_PHOTO_SIZE / 1024 / 1024} MB)"
+        )
+    # Upload and update avatar
+    url = update_character_avatar(db, character_id, file.file, file.filename, content_type=file.content_type)
+    if not url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Character not found or failed to update avatar"
+        )
+    return CharacterAvatarResponse(url=url)

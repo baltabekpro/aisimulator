@@ -21,6 +21,7 @@ import psycopg2
 import psycopg2.extras
 import json
 from datetime import datetime
+from werkzeug.utils import secure_filename
 
 # Заменим неработающий импорт
 # from admin_panel.context_processors import utility_processor
@@ -434,8 +435,8 @@ def create_user():
 @login_required
 def view_user(user_id):
     try:
-        # Get user data
-        query = "SELECT id, username, email, created_at, updated_at, is_active FROM users WHERE id = :id"
+        # Select primary key as id for template compatibility
+        query = "SELECT user_id as id, username, email, created_at, updated_at, is_active FROM users WHERE user_id = :id"
         results = execute_query(query, {"id": user_id})
         
         if not results or len(results) == 0:
@@ -444,7 +445,17 @@ def view_user(user_id):
         user = {}
         for key in results[0]._mapping:
             user[key] = results[0]._mapping[key]
-        
+        # Fetch primary avatar URL if exists
+        try:
+            with get_db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT url FROM user_photos WHERE user_id = %s AND is_primary = TRUE", (user_id,))
+                row = cur.fetchone()
+                user['avatar_url'] = row[0] if row else None
+        except Exception:
+            user['avatar_url'] = None
+        # Debug log avatar URL
+        logger.info(f"view_user: primary avatar_url for user {user_id}: {user.get('avatar_url')}")
         # Get user characters
         query = """
             SELECT id, name, background, age, created_at
@@ -483,6 +494,89 @@ def view_user(user_id):
         logger.error(f"Error viewing user: {e}")
         flash(f'Ошибка при просмотре пользователя: {str(e)}', 'danger')
         return redirect(url_for('users'))
+
+@app.route('/users/<user_id>/avatar', methods=['POST'])
+@login_required
+def upload_user_avatar(user_id):
+    """Upload and set primary avatar for a user using MinIO storage"""
+    try:
+        from minio import Minio
+    except ImportError:
+        logger.error("MinIO client not installed. Install with: pip install minio")
+        flash("Storage error: MinIO client not installed", "danger")
+        return redirect(url_for('view_user', user_id=user_id))
+        
+    file = request.files.get('avatar')
+    if not file:
+        flash('No avatar file selected', 'danger')
+        return redirect(url_for('view_user', user_id=user_id))
+        
+    # Validate content type
+    if file.content_type not in ['image/jpeg','image/png','image/jpg']:
+        flash('Invalid file type. Use JPG or PNG.', 'danger')
+        return redirect(url_for('view_user', user_id=user_id))
+    
+    try:
+        # Setup MinIO client
+        minio_endpoint = os.environ.get("S3_ENDPOINT", "minio:9000").replace("http://", "")
+        minio_client = Minio(
+            minio_endpoint,
+            access_key=os.environ.get("S3_ACCESS_KEY", "minioadmin"),
+            secret_key=os.environ.get("S3_SECRET_KEY", "minioadmin"),
+            secure=False  # Set to True if using HTTPS
+        )
+        
+        # Make bucket if it doesn't exist
+        bucket_name = os.environ.get("S3_BUCKET_NAME", "user-files")
+        logger.info(f"Connecting to MinIO: {minio_endpoint}, bucket: {bucket_name}")
+        
+        try:
+            if not minio_client.bucket_exists(bucket_name):
+                minio_client.make_bucket(bucket_name)
+                logger.info(f"Created bucket: {bucket_name}")
+        except Exception as be:
+            logger.error(f"Bucket check/creation error: {be}")
+            flash(f"Storage error: {str(be)}", "danger")
+            return redirect(url_for('view_user', user_id=user_id))
+        
+        # Save file to temp location
+        filename = secure_filename(file.filename)
+        temp_path = f"/tmp/{filename}"
+        file.save(temp_path)
+        logger.info(f"Saved temp file to {temp_path}")
+        
+        # Upload to MinIO
+        object_name = f"users/{user_id}/{filename}"
+        minio_client.fput_object(bucket_name, object_name, temp_path, content_type=file.content_type)
+        logger.info(f"Uploaded to MinIO as {object_name}")
+        
+        # Get public URL
+        public_url = f"{os.environ.get('MINIO_PUBLIC_URL', 'http://minio:9000')}/{bucket_name}/{object_name}"
+        logger.info(f"Avatar public URL: {public_url}")
+        
+        # Save to DB
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            # Unset previous primary
+            cur.execute("UPDATE user_photos SET is_primary = FALSE WHERE user_id = %s", (user_id,))
+            # Insert new photo record
+            photo_id = str(uuid.uuid4())
+            cur.execute(
+                "INSERT INTO user_photos (id, user_id, url, filename, content_type, size, is_primary, created_at)"
+                " VALUES (%s, %s, %s, %s, %s, %s, TRUE, NOW())",
+                (photo_id, user_id, public_url, object_name, file.content_type, os.path.getsize(temp_path))
+            )
+            conn.commit()
+            logger.info(f"Saved avatar to DB with photo_id: {photo_id}")
+            
+        # Delete temp file
+        os.remove(temp_path)
+        flash('Avatar uploaded successfully', 'success')
+    except Exception as e:
+        logger.error(f"Error uploading avatar to MinIO: {e}")
+        flash(f"Failed to save avatar: {str(e)}", 'danger')
+        
+    return redirect(url_for('view_user', user_id=user_id))
 
 # Character routes
 @app.route('/characters')
@@ -813,18 +907,95 @@ def edit_character(character_id):
                     interests = [interest.strip() for interest in interests.split(',') if interest.strip()]
                 
                 cursor.execute("""
-                    UPDATE characters 
-                    SET name = %s, age = %s, gender = %s, background = %s, 
-                        personality_traits = %s, interests = %s, updated_at = %s
+                    UPDATE characters
+                    SET name = %s,
+                        age = %s,
+                        gender = %s,
+                        background = %s,
+                        personality = %s,
+                        interests = %s,
+                        updated_at = %s
                     WHERE id::text = %s
                 """, (
-                    name, age, gender, background, 
-                    personality_traits, interests, datetime.now(), character_id
+                    name,
+                    age,
+                    gender,
+                    background,
+                    json.dumps(personality_traits) if isinstance(personality_traits, (list, dict)) else personality_traits,
+                    json.dumps(interests) if isinstance(interests, (list, dict)) else interests,
+                    datetime.now(),
+                    character_id
                 ))
-                conn.commit()
                 
+                # Handle avatar upload - now using MinIO
+                avatar_file = request.files.get('avatar')
+                if avatar_file and avatar_file.filename:
+                    try:
+                        from minio import Minio
+                    except ImportError:
+                        logger.error("MinIO client not installed. Install with: pip install minio")
+                        flash("Storage error: MinIO client not installed", "danger")
+                        return redirect(url_for('characters'))
+                        
+                    # Validate content type
+                    if avatar_file.content_type not in ['image/jpeg','image/png','image/jpg']:
+                        flash('Invalid avatar file type. Use JPG or PNG.', 'danger')
+                    else:
+                        try:
+                            # Setup MinIO client
+                            minio_endpoint = os.environ.get("S3_ENDPOINT", "minio:9000").replace("http://", "")
+                            minio_client = Minio(
+                                minio_endpoint,
+                                access_key=os.environ.get("S3_ACCESS_KEY", "minioadmin"),
+                                secret_key=os.environ.get("S3_SECRET_KEY", "minioadmin"),
+                                secure=False  # Set to True if using HTTPS
+                            )
+                            
+                            # Make bucket if it doesn't exist
+                            bucket_name = os.environ.get("S3_BUCKET_NAME", "user-files")
+                            logger.info(f"Connecting to MinIO: {minio_endpoint}, bucket: {bucket_name}")
+                            
+                            try:
+                                if not minio_client.bucket_exists(bucket_name):
+                                    minio_client.make_bucket(bucket_name)
+                                    logger.info(f"Created bucket: {bucket_name}")
+                            except Exception as be:
+                                logger.error(f"Bucket check/creation error: {be}")
+                                flash(f"Storage error: {str(be)}", "danger")
+                                return redirect(url_for('characters'))
+                            
+                            # Save file to temp location
+                            avatar_filename = secure_filename(avatar_file.filename)
+                            temp_path = f"/tmp/{avatar_filename}"
+                            avatar_file.save(temp_path)
+                            logger.info(f"Saved temp avatar file to {temp_path}")
+                            
+                            # Upload to MinIO
+                            object_name = f"characters/{character_id}/{avatar_filename}"
+                            minio_client.fput_object(bucket_name, object_name, temp_path, content_type=avatar_file.content_type)
+                            logger.info(f"Uploaded character avatar to MinIO as {object_name}")
+                            
+                            # Get public URL
+                            avatar_url = f"{os.environ.get('MINIO_PUBLIC_URL', 'http://minio:9000')}/{bucket_name}/{object_name}"
+                            logger.info(f"Character avatar public URL: {avatar_url}")
+                            
+                            # Update avatar URL in database
+                            cursor.execute(
+                                "UPDATE characters SET avatar_url = %s WHERE id::text = %s",
+                                (avatar_url, character_id)
+                            )
+                            
+                            # Delete temp file
+                            os.remove(temp_path)
+                            flash('Character avatar uploaded successfully', 'success')
+                        except Exception as e:
+                            logger.error(f"Error uploading character avatar to MinIO: {e}")
+                            flash(f"Failed to save avatar: {str(e)}", "danger")
+                
+                # Commit all changes
+                conn.commit()
                 flash("Персонаж успешно обновлен", "success")
-                return redirect(url_for('characters'))  # Use correct endpoint name
+                return redirect(url_for('characters'))
             
             # GET method - fetch character data
             cursor.execute("SELECT * FROM characters WHERE id::text = %s", (character_id,))
@@ -832,13 +1003,13 @@ def edit_character(character_id):
             
             if not character:
                 flash("Персонаж не найден", "danger")
-                return redirect(url_for('characters'))  # Use correct endpoint name
+                return redirect(url_for('characters'))
             
             return render_template('characters/edit.html', character=character)
     except Exception as e:
         logger.error(f"Error editing character: {e}")
         flash(f"Ошибка при редактировании персонажа: {e}", "danger")
-        return redirect(url_for('characters'))  # Use correct endpoint name
+        return redirect(url_for('characters'))
 
 @app.route('/characters/<character_id>/memories')
 @login_required

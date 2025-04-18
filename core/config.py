@@ -74,7 +74,9 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: Optional[str] = os.environ.get("S3_SECRET_KEY")
     S3_BUCKET_NAME: str = os.environ.get("S3_BUCKET_NAME", "user-files")
     S3_REGION: Optional[str] = os.environ.get("S3_REGION")
-    
+    # Public URL for MinIO/S3 access, fallback to endpoint
+    MINIO_PUBLIC_URL: Optional[str] = os.environ.get("MINIO_PUBLIC_URL")
+
     class Config:
         env_file = ".env"
         case_sensitive = True

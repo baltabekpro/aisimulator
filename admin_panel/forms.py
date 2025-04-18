@@ -4,6 +4,7 @@ WTForms for the admin panel.
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, Optional
+from flask_wtf.file import FileField, FileAllowed
 
 class LoginForm(FlaskForm):
     """Form for user login."""
@@ -18,4 +19,5 @@ class UserForm(FlaskForm):
     email = StringField('Email', validators=[Email(), Optional()])
     password = PasswordField('Password', validators=[Length(min=6, max=50), Optional()])
     is_active = BooleanField('Active')
+    avatar = FileField('Avatar', validators=[FileAllowed(['jpg','jpeg','png'], 'Images only!')])
     submit = SubmitField('Save')

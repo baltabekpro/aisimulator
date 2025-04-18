@@ -30,3 +30,6 @@ tenacity>=8.2.2
 
 # Logging
 loguru>=0.7.0
+
+# MinIO client
+minio>=7.1.13

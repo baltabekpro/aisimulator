@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.auth.jwt import get_current_user
 from app.schemas.user import UserProfileResponse, UserProfileUpdate
 from app.services import photo_service, profile_service
+from app.services.storage_service import upload_file, delete_file
 from core.db.models.user import User
 from core.config import settings
 
@@ -121,42 +122,34 @@ async def upload_user_photo(
             detail=f"Размер файла превышает максимально допустимый ({MAX_PHOTO_SIZE / 1024 / 1024} MB)"
         )
     
-    # Генерируем имя файла и путь
+    # Генерируем ключ объекта в хранилище
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{user_id}_{timestamp}_{photo.filename}"
-    file_path = os.path.join(UPLOAD_DIRECTORY, filename)
-    
-    # Создаем директорию, если не существует
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    
-    # Сохраняем файл
+    object_name = f"users/{user_id}/{timestamp}_{photo.filename}"
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(photo.file, buffer)
+        # Загружаем файл в хранилище
+        bucket = settings.S3_BUCKET_NAME
+        url = upload_file(bucket, object_name, photo.file, content_type=photo.content_type)
     except Exception as e:
-        logger.error(f"Error saving file: {e}")
+        logger.error(f"Error uploading file to storage: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не удалось сохранить файл"
+            detail="Не удалось загрузить файл в хранилище"
         )
-    
-    # Формируем URL для доступа к файлу
-    base_url = settings.BASE_URL.rstrip("/")
-    url = f"{base_url}/uploads/photos/{filename}"
     
     # Сохраняем информацию о фото в БД
     photo_id = photo_service.create_photo(
-        db, user_id, url, filename, 
+        db, user_id, url, object_name,
         content_type=photo.content_type, 
         size=size,
         is_primary=is_primary
     )
     
     if not photo_id:
-        # Если не удалось сохранить в БД, удаляем файл
+        # Если не удалось сохранить в БД, удаляем объект из хранилища
         try:
-            os.unlink(file_path)
-        except:
+            bucket = settings.S3_BUCKET_NAME
+            delete_file(bucket, object_name)
+        except Exception:
             pass
         
         raise HTTPException(

@@ -284,3 +284,28 @@ def get_character_photos(character_id: str, count: int = 3) -> List[Dict[str, An
         })
     
     return photos
+
+from app.services.storage_service import upload_file
+from core.config import settings
+from core.db.models.character import Character
+from sqlalchemy.orm import Session
+
+def update_character_avatar(db: Session, character_id: str, file_obj, filename: str, content_type: str = None) -> Optional[str]:
+    """
+    Uploads a file to storage and updates the character's avatar_url. Returns the URL if successful.
+    """
+    try:
+        # Upload to storage
+        object_name = f"characters/{character_id}/{filename}"
+        url = upload_file(settings.S3_BUCKET_NAME, object_name, file_obj, content_type=content_type)
+        # Update DB record
+        character = db.query(Character).filter(Character.id == character_id).first()
+        if not character:
+            return None
+        character.avatar_url = url
+        db.commit()
+        return url
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating character avatar: {e}")
+        return None

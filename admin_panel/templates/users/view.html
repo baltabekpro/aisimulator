@@ -18,7 +18,25 @@
 </div>
 
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-md-3">
+        <div class="card mb-4 text-center">
+            <div class="card-body">
+                {% if user.avatar_url %}
+                <img src="{{ user.avatar_url }}" class="img-fluid rounded-circle mb-3" alt="Avatar">
+                {% else %}
+                <i class="bi bi-person-circle fs-1 text-secondary"></i>
+                <p class="mt-2">No avatar</p>
+                {% endif %}
+                <form action="{{ url_for('upload_user_avatar', user_id=user.id) }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-2">
+                        <input type="file" name="avatar" accept="image/*" class="form-control">
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary">Upload Avatar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-9">
         <div class="card mb-4">
             <div class="card-header">
                 <h5>Информация о пользователе</h5>

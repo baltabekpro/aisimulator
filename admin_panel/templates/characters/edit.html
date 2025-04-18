@@ -14,7 +14,7 @@
             <h6 class="m-0 font-weight-bold text-primary">Данные персонажа</h6>
         </div>
         <div class="card-body">
-            <form method="POST">
+            <form method="POST" enctype="multipart/form-data">
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="name">Имя</label>
@@ -54,6 +54,11 @@
                                value="{{ character.interests|join(', ') if character.interests is iterable and character.interests is not string else character.interests }}">
                         <small class="form-text text-muted">Список интересов через запятую</small>
                     </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="avatar">Avatar</label>
+                    <input type="file" class="form-control" id="avatar" name="avatar" accept="image/*">
                 </div>
 
                 <button type="submit" class="btn btn-primary">Сохранить изменения</button>

@@ -50,3 +50,10 @@ class MatchNotification(BaseModel):
     avatar_url: Optional[str] = None
     message: str = "You have a new match!"
     created_at: datetime = Field(default_factory=datetime.now)
+
+class CharacterAvatarResponse(BaseModel):
+    url: str
+    message: str = "Avatar successfully updated"
+
+    class Config:
+        from_attributes = True
