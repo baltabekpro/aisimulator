@@ -88,6 +88,11 @@ services:
         delay: 10s
         max_attempts: 5
         window: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Admin панель (Flask + Gunicorn)
   admin:
@@ -134,7 +139,7 @@ services:
       db-init:
         condition: service_completed_successfully
       api:
-        condition: service_started
+        condition: service_healthy
       minio:
         condition: service_started
     volumes:

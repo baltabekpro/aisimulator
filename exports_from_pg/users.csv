@@ -1,0 +1,4 @@
+user_id,username,email,password_hash,name,is_active,is_admin,created_at,updated_at,external_id
+31ad9188-1df4-4015-8e4f-3b0e09a13fae,admin,admin@example.com,$2a$06$xyI2meXLtrEYk4d9ZS0pRu2hyINBAskISljxVy5P9ud3rILLdmEDG,Admin User,t,t,2025-04-16 16:05:31.107804,,
+6ddd199e-db22-4b64-bece-7829e83cc9a0,user,user@example.com,$2a$06$XHjns1QvTOT7H7CwjoBByu9GjrAOUVq2mjjItMEC940cKpxRP0Dla,Test User,t,f,2025-04-16 16:05:31.112236,,
+00000000-0000-0000-0000-000000000000,system,system@example.com,$2b$12$K8uw2YYdIzp2XvRWMs9vpO6STRyI53aUEym.Oi4XwqVgRvG/f7kUC,System,t,f,2025-04-16 16:38:40.789936,,

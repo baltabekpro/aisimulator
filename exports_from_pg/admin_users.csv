@@ -1,0 +1,2 @@
+id,username,email,password_hash,is_active,last_login,created_at
+a749da96-c081-4828-a1bc-280ab9f68e31,admin,admin@example.com,pbkdf2:sha256:260000$VjDUOZ3cbZqOeIqT$1e7e0e276663459b5bbc1f41cc2c287c62db02ccb1820e0541a94c5f9812ff05,t,,2025-04-16 16:07:11.484173

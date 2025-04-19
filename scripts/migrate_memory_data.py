@@ -19,24 +19,47 @@ logger = logging.getLogger(__name__)
 def check_character_exists(conn, character_id):
     """Check if a character exists in the database"""
     try:
+        # Преобразуем character_id в строку, если это объект UUID
+        character_id_str = str(character_id) if isinstance(character_id, uuid.UUID) else character_id
+            
+        # Используем безопасный формат запроса для PostgreSQL
         result = conn.execute(text("""
             SELECT COUNT(*) FROM characters
-            WHERE id::text = :character_id
-        """), {"character_id": character_id}).scalar()
+            WHERE id = CAST(:character_id AS UUID)
+        """), {"character_id": character_id_str}).scalar()
         return result > 0
     except Exception as e:
         logger.warning(f"Error checking if character {character_id} exists: {e}")
         return False
 
+def check_user_exists(conn, user_id):
+    """Check if a user exists in the database"""
+    if user_id is None:
+        return False # None user_id doesn't exist, will be replaced by system user later
+    try:
+        user_id_str = str(user_id) if isinstance(user_id, uuid.UUID) else user_id
+        result = conn.execute(text("""
+            SELECT COUNT(*) FROM users
+            WHERE user_id = CAST(:user_id AS UUID)
+        """), {"user_id": user_id_str}).scalar()
+        return result > 0
+    except Exception as e:
+        logger.warning(f"Error checking if user {user_id} exists: {e}")
+        return False
+
 def memory_exists(conn, character_id, content):
     """Check if a memory already exists"""
     try:
+        # Преобразуем character_id в строку, если это объект UUID
+        character_id_str = str(character_id) if isinstance(character_id, uuid.UUID) else character_id
+            
+        # Используем безопасный формат запроса для PostgreSQL
         result = conn.execute(text("""
             SELECT COUNT(*) FROM memory_entries
-            WHERE character_id::text = :character_id
+            WHERE character_id = CAST(:character_id AS UUID)
             AND content = :content
         """), {
-            "character_id": character_id,
+            "character_id": character_id_str,
             "content": content
         }).scalar()
         return result > 0
@@ -141,22 +164,34 @@ def migrate_memory_data():
                                 skipped_memories += 1
                                 continue
                             
-                            # Insert the memory
-                            memory_id = str(uuid.uuid4())
-                            timestamp = created_at or datetime.now().isoformat()
-                            
+                            # Check if the user exists, otherwise use system user
+                            if not check_user_exists(conn, user_id):
+                                logger.warning(f"User {user_id} not found, assigning memory to system user.")
+                                user_id_str = "00000000-0000-0000-0000-000000000000"
+                            elif isinstance(user_id, uuid.UUID):
+                                user_id_str = str(user_id)
+                            else:
+                                user_id_str = user_id
+
+                            # Убедимся, что character_id тоже строка
+                            if isinstance(character_id, uuid.UUID):
+                                character_id_str = str(character_id)
+                            else:
+                                character_id_str = character_id
+
                             conn.execute(text("""
                                 INSERT INTO memory_entries (
-                                    id, character_id, user_id, memory_type, category, content,
+                                    id, character_id, user_id, type, memory_type, category, content,
                                     importance, is_active, created_at, updated_at
                                 ) VALUES (
-                                    :id, :character_id, :user_id, :memory_type, :category, :content,
+                                    :id, CAST(:character_id AS UUID), CAST(:user_id AS UUID), :type, :memory_type, :category, :content,
                                     :importance, :is_active, :created_at, :updated_at
                                 )
                             """), {
                                 "id": memory_id,
-                                "character_id": character_id,
-                                "user_id": user_id or str(uuid.uuid4()),  # Use a generated UUID if no user_id
+                                "character_id": character_id_str,
+                                "user_id": user_id_str, # Используем проверенный или системный user_id
+                                "type": memory_type,
                                 "memory_type": memory_type,
                                 "category": category,
                                 "content": content,

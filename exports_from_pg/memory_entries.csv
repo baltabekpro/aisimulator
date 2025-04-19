@@ -1,0 +1,2 @@
+id,character_id,user_id,type,content,importance,is_active,created_at,updated_at,memory_type,category
+30ea9ce3-a10e-4991-bc94-83537f1eb671,8c054f20-4a77-4eef-83e6-245d3456bdf1,00000000-0000-0000-0000-000000000000,personal_info,тест,5,t,2025-04-19 17:09:14.963404,,personal_info,name

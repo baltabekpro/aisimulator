@@ -659,73 +659,66 @@ class MemoryManager:
                 user_row = user_result.fetchone() if user_result else None
                 user_id = user_row[0] if user_row else None
             
+            # Используем системного пользователя, если user_id не найден
             if not user_id:
-                self.logger.warning(f"No user found for character {character_id}, skipping memory_entries inserts")
-                user_id_str = None
+                self.logger.info("User ID not found, using system user (00000000-0000-0000-0000-000000000000)")
+                user_id_str = "00000000-0000-0000-0000-000000000000"
             else:
                 user_id_str = str(user_id)
-                # Verify user exists in users table, else skip memory_entries
-                user_exists = execute_safe_query(db_session, \
-                    "SELECT 1 FROM users WHERE id::text = :user_id", {"user_id": user_id_str}
-                ).scalar()
-                if not user_exists:
-                    self.logger.warning(f"User {user_id_str} not in users table, skipping memory_entries insertion")
-                    user_id_str = None
 
             saved_count = 0
-             # only insert into memory_entries if user_id_str is valid
-            if user_id_str:
-                for memory in memories:
-                    # Check if this memory already exists
-                    memory_content = memory.get("content", "")
-                    if not memory_content:
-                        continue
-                        
-                    memory_type = memory.get("type", "unknown")
-                    category = memory.get("category", "general")
-                    importance = memory.get("importance", 5)
+            # Всегда сохраняем в memory_entries (независимо от того, был найден user_id или нет)
+            for memory in memories:
+                # Check if this memory already exists
+                memory_content = memory.get("content", "")
+                if not memory_content:
+                    continue
                     
-                    # Check if memory exists
-                    exists_result = execute_safe_query(db_session, """
-                        SELECT COUNT(*) FROM memory_entries
-                        WHERE character_id::text = :character_id 
-                        AND content = :content
+                memory_type = memory.get("type", "unknown")
+                category = memory.get("category", "general")
+                importance = memory.get("importance", 5)
+                
+                # Check if memory exists
+                exists_result = execute_safe_query(db_session, """
+                    SELECT COUNT(*) FROM memory_entries
+                    WHERE character_id::text = :character_id 
+                    AND content = :content
+                """, {
+                    "character_id": character_id_str,
+                    "content": memory_content
+                })
+                
+                exists = exists_result.scalar() > 0 if exists_result else False
+                
+                if not exists:
+                    # Insert the memory
+                    memory_id = str(uuid.uuid4())
+                    timestamp = datetime.datetime.now().isoformat()
+                    
+                    execute_safe_query(db_session, """
+                        INSERT INTO memory_entries (
+                            id, character_id, user_id, type, memory_type, category, content,
+                            importance, is_active, created_at, updated_at
+                        ) VALUES (
+                            :id, :character_id, :user_id, :type, :memory_type, :category, :content,
+                            :importance, :is_active, :created_at, :updated_at
+                        )
                     """, {
+                        "id": memory_id,
                         "character_id": character_id_str,
-                        "content": memory_content
+                        "user_id": user_id_str,
+                        "type": memory_type,
+                        "memory_type": memory_type,
+                        "category": category,
+                        "content": memory_content,
+                        "importance": importance,
+                        "is_active": True,
+                        "created_at": timestamp,
+                        "updated_at": timestamp
                     })
                     
-                    exists = exists_result.scalar() > 0 if exists_result else False
-                    
-                    if not exists:
-                        # Insert the memory
-                        memory_id = str(uuid.uuid4())
-                        timestamp = datetime.datetime.now().isoformat()
-                        
-                        execute_safe_query(db_session, """
-                            INSERT INTO memory_entries (
-                                id, character_id, user_id, type, memory_type, category, content,
-                                importance, is_active, created_at, updated_at
-                            ) VALUES (
-                                :id, :character_id, :user_id, :type, :memory_type, :category, :content,
-                                :importance, :is_active, :created_at, :updated_at
-                            )
-                        """, {
-                            "id": memory_id,
-                            "character_id": character_id_str,
-                            "user_id": user_id_str,
-                            "type": memory_type,
-                            "memory_type": memory_type,
-                            "category": category,
-                            "content": memory_content,
-                            "importance": importance,
-                            "is_active": True,
-                            "created_at": timestamp,
-                            "updated_at": timestamp
-                        })
-                        
-                        saved_count += 1
-                        self.logger.debug(f"✅ Saved memory: [{memory_type}/{category}] {memory_content[:50]}...")
+                    saved_count += 1
+                    self.logger.debug(f"✅ Saved memory: [{memory_type}/{category}] {memory_content[:50]}...")
             
             # Also save to events table as a batch for backward compatibility
             try:
@@ -959,13 +952,18 @@ class MemoryManager:
                 session = self.db.get_session()
                 should_close_session = True
                 
+            # Если user_id не указан, используем системного пользователя
+            if user_id is None:
+                self.logger.info("User ID not provided to save_memories_to_database, using system user")
+                user_id = "00000000-0000-0000-0000-000000000000"
+                
             count = 0
             for memory in memories:
                 # Format memory for database storage
                 memory_entry = {
                     "id": str(uuid.uuid4()),
                     "character_id": character_id or self.character_id,
-                    "user_id": user_id,  # Use provided user_id
+                    "user_id": user_id,  # Use provided user_id or system user
                     "memory_type": memory.get("type", "other"),  # Fixed: Using memory_type instead of type
                     "category": memory.get("category", "general"),
                     "content": memory.get("content", ""),

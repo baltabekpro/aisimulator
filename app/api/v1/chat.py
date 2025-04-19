@@ -94,6 +94,7 @@ async def get_characters(
                             "personality_traits": [],
                             "interests": [],
                             "background": row_dict.get('background', ''),
+                            "avatar_url": row_dict.get('avatar_url'),
                             "current_emotion": {
                                 "name": row_dict.get('current_emotion', 'neutral'),
                                 "intensity": 0.5,
@@ -159,6 +160,7 @@ async def get_characters(
                             "personality_traits": [],
                             "interests": [],
                             "background": row_dict.get('background', ''),
+                            "avatar_url": row_dict.get('avatar_url'),
                             "current_emotion": {
                                 "name": row_dict.get('current_emotion', 'neutral'),
                                 "intensity": 0.5,
@@ -1179,6 +1181,7 @@ async def get_character_memories(
     character_id: str,
     user_id: Optional[str] = None,
     telegram_id: Optional[str] = None,
+    include_all: bool = Query(False),
     db: Session = Depends(get_db),
     x_api_key: Optional[str] = Header(None),
     authorization: Optional[str] = Header(None)
@@ -1216,6 +1219,11 @@ async def get_character_memories(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # If include_all is requested, ignore user filters to return all memories
+    if include_all:
+        user_id = None
+        telegram_id = None
+
     # Check if character exists
     character = db.execute(text("""
         SELECT id, name FROM characters 
@@ -1231,6 +1239,34 @@ async def get_character_memories(
     
     if not character:
         return {"memories": [], "count": 0, "error": "Character not found"}
+    
+    # When include_all, return all stored memories from events table
+    if include_all:
+        try:
+            from core.db.models import Event
+            evt = db.query(Event).filter(
+                Event.character_id == character_id,
+                Event.event_type == 'memory'
+            ).first()
+            if evt and evt.data:
+                import json as _json
+                mem_list = _json.loads(evt.data)
+                result = []
+                for m in mem_list:
+                    result.append({
+                        "id": m.get('id'),
+                        "type": m.get('type', m.get('memory_type', 'unknown')),
+                        "memory_type": m.get('memory_type', m.get('type', 'unknown')),
+                        "category": m.get('category', 'general'),
+                        "content": m.get('content'),
+                        "importance": m.get('importance', 5),
+                        "is_active": m.get('is_active', True),
+                        "user_id": m.get('user_id'),
+                        "created_at": m.get('created_at')
+                    })
+                return {"memories": result, "count": len(result)}
+        except Exception:
+            logger.error("Error loading full memories for include_all", exc_info=True)
     
     # Check columns in the memory_entries table
     try:
@@ -1252,9 +1288,9 @@ async def get_character_memories(
         
         # Handle the memory type column which might be named 'memory_type' or just 'type'
         type_fields = []
-        if has_memory_type:
+        if (has_memory_type):
             type_fields.append("memory_type")
-        if has_type:
+        if (has_type):
             type_fields.append("type")
             
         if type_fields:
@@ -1452,6 +1488,7 @@ async def get_character_memories(
             """
             
             params = {"character_id": character_id}
+            
             user_id_condition = []
             
             if user_id:

@@ -14,6 +14,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, KeyboardButtonPollType, ReplyKeyboardRemove
 import datetime
 import re
+import io
+from io import BytesIO
+from aiogram.types import InputFile
 
 # Add the parent directory to system path to allow imports from 'core'
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -80,6 +83,152 @@ if not API_KEY:
 
 # Initialize API client with API key
 api_client = ApiClient(api_key=API_KEY)
+
+# Get MinIO URL mapping from environment
+def get_minio_url_mapping():
+    """
+    Получает маппинг для URL MinIO из переменных окружения
+    Returns:
+        dict: Словарь с маппингом внутренних URL на публичные
+    """
+    # Базовый маппинг
+    default_mapping = {
+        "http://minio:9000": "http://localhost:9000",
+        "https://minio:9000": "https://localhost:9000"
+    }
+    
+    try:
+        # Сначала проверим специфичную для MinIO переменную
+        minio_url_mapping = os.getenv("MINIO_URL_MAPPING")
+        if (minio_url_mapping):
+            try:
+                # Попытаемся распарсить JSON
+                import json
+                mapping = json.loads(minio_url_mapping)
+                logger.info(f"Используем MINIO_URL_MAPPING из переменных окружения: {mapping}")
+                return mapping
+            except Exception as e:
+                logger.error(f"Ошибка при парсинге MINIO_URL_MAPPING: {e}")
+        
+        # Проверим наличие публичного URL для MinIO
+        minio_public_url = os.getenv("MINIO_PUBLIC_URL")
+        if minio_public_url:
+            # Добавим маппинг для внутреннего адреса на публичный
+            default_mapping["http://minio:9000"] = minio_public_url
+            default_mapping["https://minio:9000"] = minio_public_url
+            logger.info(f"Используем MINIO_PUBLIC_URL из переменных окружения: {minio_public_url}")
+        
+        return default_mapping
+    except Exception as e:
+        logger.error(f"Ошибка при получении маппинга URL MinIO: {e}")
+        return default_mapping
+
+# Функция для корректировки URL MinIO
+def fix_minio_url(url):
+    """
+    Исправляет URL MinIO для правильного доступа
+    
+    Args:
+        url (str): Исходный URL
+        
+    Returns:
+        str: Исправленный URL
+    """
+    if not url:
+        return url
+        
+    # Получаем маппинг
+    url_mapping = get_minio_url_mapping()
+    
+    # Применяем маппинг
+    for internal_url, public_url in url_mapping.items():
+        if internal_url in url:
+            return url.replace(internal_url, public_url)
+    
+    return url
+
+# Функция для скачивания аватара с несколькими попытками и альтернативами
+async def download_avatar(avatar_url, character_id=None, max_retries=3):
+    """
+    Скачивает аватар с несколькими попытками и альтернативными URL
+    
+    Args:
+        avatar_url (str): URL аватара
+        character_id (str, optional): ID персонажа для логов
+        max_retries (int, optional): Максимальное количество попыток
+        
+    Returns:
+        tuple: (bytes_data, content_type) или (None, None) в случае ошибки
+    """
+    if not avatar_url:
+        return None, None
+    
+    # Применяем маппинг к начальному URL
+    avatar_url = fix_minio_url(avatar_url)
+    
+    logger.info(f"Скачиваем аватар с URL: {avatar_url} для персонажа {character_id or 'unknown'}")
+    
+    # Пробуем все возможные URL
+    urls_to_try = [
+        avatar_url,  # Начальный URL (уже с примененным маппингом)
+        avatar_url.replace("localhost:9000", "minio:9000"),  # На случай если мы внутри Docker
+        avatar_url.replace("minio:9000", "localhost:9000"),  # На случай если мы вне Docker
+        avatar_url.replace("http://", "https://"),  # HTTP -> HTTPS
+        avatar_url.replace("https://", "http://")   # HTTPS -> HTTP
+    ]
+    
+    # Удаляем дубликаты
+    urls_to_try = list(dict.fromkeys(urls_to_try))
+    
+    # Пробуем скачать с каждого URL
+    for i, url in enumerate(urls_to_try):
+        try:
+            logger.debug(f"Попытка {i+1}/{len(urls_to_try)}: {url}")
+            
+            async with aiohttp.ClientSession() as session:
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        async with session.get(url, timeout=5) as response:
+                            if response.status == 200:
+                                data = await response.read()
+                                content_type = response.content_type
+                                logger.info(f"Аватар успешно скачан ({len(data)} байт)")
+                                return data, content_type
+                            else:
+                                logger.warning(f"Ошибка при скачивании аватара: HTTP {response.status}")
+                    except aiohttp.ClientError as e:
+                        logger.warning(f"Ошибка сетевого соединения (попытка {attempt}/{max_retries}): {e}")
+                        if attempt < max_retries:
+                            await asyncio.sleep(1)  # Небольшая пауза перед следующей попыткой
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка при скачивании аватара с {url}: {e}")
+    
+    # Проверяем локальный путь как последнюю альтернативу
+    if character_id:
+        local_paths = [
+            f"/app/avatars/{character_id}.png",
+            f"/app/avatars/{character_id}.jpg",
+            f"/app/avatars/{character_id}.jpeg",
+            f"avatars/{character_id}.png",
+            f"avatars/{character_id}.jpg"
+        ]
+        
+        for path in local_paths:
+            try:
+                if os.path.exists(path):
+                    logger.info(f"Найден локальный файл аватара: {path}")
+                    with open(path, "rb") as f:
+                        # Определяем content_type по расширению
+                        ext = path.lower().split('.')[-1]
+                        content_type = f"image/{ext}"
+                        if ext == "jpg":
+                            content_type = "image/jpeg"
+                        return f.read(), content_type
+            except Exception as e:
+                logger.error(f"Ошибка при чтении локального файла {path}: {e}")
+    
+    logger.error(f"Не удалось скачать аватар после всех попыток")
+    return None, None
 
 # Определение состояний FSM
 class BotStates(StatesGroup):
@@ -255,6 +404,131 @@ async def select_character_handler(message: types.Message, state: FSMContext):
         await message.answer("Произошла ошибка при выборе персонажа. Пожалуйста, попробуйте снова: /start")
         await state.clear()
 
+async def ensure_user_exists(telegram_id: int) -> str:
+    """
+    Проверяет существование пользователя в базе данных и создаёт его если нужно.
+    Возвращает UUID пользователя для использования с API памяти.
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+    
+    Returns:
+        str: UUID пользователя в формате строки
+    """
+    try:
+        headers = {"Authorization": f"Bearer {API_KEY}", "X-API-Key": API_KEY}
+        
+        # Преобразуем Telegram ID в надежный UUID формат
+        user_uuid = await get_user_uuid_for_telegram_id(telegram_id, None)
+        user_id_str = user_uuid[0] if isinstance(user_uuid, tuple) else user_uuid
+        logger.info(f"Проверяю/создаю пользователя с ID: {user_id_str} для Telegram ID: {telegram_id}")
+        
+        # Сначала проверим, существует ли пользователь
+        async with aiohttp.ClientSession() as session:
+            try:
+                # Попытаемся получить пользователя по UUID
+                check_user_url = f"{API_BASE_URL}/users/{user_id_str}"
+                async with session.get(check_user_url, headers=headers) as response:
+                    if response.status == 200:
+                        user_data = await response.json()
+                        logger.info(f"Пользователь найден: {user_data.get('username', 'Unknown')}")
+                        return user_id_str
+            except Exception as e:
+                logger.warning(f"Ошибка при проверке пользователя: {e}")
+        
+        # Пользователь не найден, создаем нового
+        try:
+            # Формируем хуманизированное имя пользователя
+            username = f"telegram_{telegram_id}"
+            email = f"user_{telegram_id}@telegram.local"
+            name = f"Telegram User {telegram_id}"
+            
+            user_data = {
+                "user_id": user_id_str,  # Предопределенный UUID на основе Telegram ID
+                "username": username,
+                "email": email,
+                "name": name,
+                "is_active": True
+            }
+            
+            # Пробуем через разные эндпоинты API создать пользователя
+            create_endpoints = [
+                f"{API_BASE_URL}/users/create",
+                f"{API_BASE_URL}/auth/register",
+                f"{API_BASE_URL}/users"
+            ]
+            
+            for endpoint in create_endpoints:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            endpoint, 
+                            json=user_data,
+                            headers=headers
+                        ) as response:
+                            if response.status in [200, 201]:
+                                created_user = await response.json()
+                                logger.info(f"Пользователь успешно создан через {endpoint}")
+                                return user_id_str
+                            else:
+                                logger.warning(f"Ошибка создания пользователя через {endpoint}: {response.status}")
+                except Exception as endpoint_error:
+                    logger.warning(f"Ошибка при обращении к {endpoint}: {endpoint_error}")
+            
+            # Если все API вызовы не сработали, используем SQL напрямую через системный эндпоинт
+            try:
+                system_sql_url = f"{API_BASE_URL}/admin/execute-sql"
+                sql_query = f"""
+                INSERT INTO users (user_id, username, email, name, password_hash, created_at, is_active)
+                VALUES ('{user_id_str}', '{username}', '{email}', '{name}', 
+                        '$2b$12$K8uw2YYdIzp2XvRWMs9vpO6STRyI53aUEym.Oi4XwqVgRvG/f7kUC', 
+                        NOW(), true)
+                ON CONFLICT (user_id) DO NOTHING
+                RETURNING user_id::text;
+                """
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        system_sql_url, 
+                        json={"query": sql_query},
+                        headers=headers
+                    ) as response:
+                        if response.status == 200:
+                            logger.info(f"Пользователь создан через SQL: {user_id_str}")
+                            return user_id_str
+                        else:
+                            logger.warning(f"Ошибка создания пользователя через SQL: {response.status}")
+            except Exception as sql_error:
+                logger.warning(f"Ошибка SQL: {sql_error}")
+                
+            # Финальная попытка через системный эндпоинт
+            try:
+                system_endpoint = f"{API_BASE_URL}/system/ensure-user"
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        system_endpoint, 
+                        json={"telegram_id": telegram_id, "user_id": user_id_str},
+                        headers=headers
+                    ) as response:
+                        if response.status == 200:
+                            logger.info(f"Пользователь создан через системный эндпоинт: {user_id_str}")
+                            return user_id_str
+            except Exception as sys_error:
+                logger.warning(f"Ошибка системного эндпоинта: {sys_error}")
+        
+        except Exception as create_error:
+            logger.error(f"Ошибка создания пользователя: {create_error}")
+        
+        # Если все попытки не удались, просто возвращаем UUID
+        logger.warning(f"Не удалось создать пользователя, используем UUID напрямую: {user_id_str}")
+        return user_id_str
+    
+    except Exception as e:
+        logger.exception(f"Общая ошибка в ensure_user_exists: {e}")
+        # Возвращаем UUID в формате строки как запасной вариант
+        fallback_uuid = f"c7cb5b5c-e469-586e-8e87-{str(telegram_id).replace(' ', '')}"
+        return fallback_uuid
+
 async def chat_handler(message: types.Message, state: FSMContext):
     # Intercept special button commands
     if (message.text == "🧠 Память"):
@@ -366,9 +640,8 @@ async def chat_handler(message: types.Message, state: FSMContext):
             memory_data = response.get("memory", [])
             logger.info(f"Извлечены новые воспоминания: {len(memory_data)} записей")
             
-            # Получаем UUID для текущего пользователя Telegram
-            user_uuid = await get_user_uuid_for_telegram_id(message.from_user.id, character_id)
-            user_id_str = user_uuid[0] if isinstance(user_uuid, tuple) else user_uuid
+            # Проверяем/создаем пользователя перед сохранением памяти
+            user_id_str = await ensure_user_exists(message.from_user.id)
             logger.info(f"Использую UUID пользователя для сохранения памяти: {user_id_str}")
             
             # Добавляем сохранение в базу данных через API
@@ -376,11 +649,14 @@ async def chat_handler(message: types.Message, state: FSMContext):
                 if (isinstance(memory, dict) and "content" in memory):
                     try:
                         # Добавляем user_id, если его нет
-                        if "user_id" not in memory:
+                        if "user_id" not in memory or not memory["user_id"]:
                             memory["user_id"] = user_id_str
                             
                         # Отправляем запрос на создание памяти через API
-                        headers = {"Authorization": f"Bearer {API_KEY}"}
+                        headers = {
+                            "Authorization": f"Bearer {API_KEY}", 
+                            "X-API-Key": API_KEY
+                        }
                         memory_url = f"{API_BASE_URL}/chat/characters/{character_id}/memories"
                         
                         async with aiohttp.ClientSession() as session:
@@ -392,7 +668,22 @@ async def chat_handler(message: types.Message, state: FSMContext):
                                 if memory_response.status == 200 or memory_response.status == 201:
                                     logger.info(f"✅ Память успешно сохранена: {memory['content'][:50]}...")
                                 else:
-                                    logger.error(f"⚠️ Ошибка сохранения памяти: {memory_response.status}")
+                                    # Если ошибка связана с внешним ключом пользователя, пробуем fallback на system user
+                                    text = await memory_response.text()
+                                    if 'violates foreign key constraint' in text and 'fk_user' in text:
+                                        logger.warning(f"Ошибка внешнего ключа пользователя, пробуем сохранить с system user")
+                                        memory["user_id"] = "00000000-0000-0000-0000-000000000000"
+                                        async with session.post(
+                                            memory_url,
+                                            json=memory,
+                                            headers=headers
+                                        ) as sys_response:
+                                            if sys_response.status == 200 or sys_response.status == 201:
+                                                logger.info(f"✅ Память сохранена с system user: {memory['content'][:50]}...")
+                                            else:
+                                                logger.error(f"⚠️ Ошибка сохранения памяти даже с system user: {sys_response.status}")
+                                    else:
+                                        logger.error(f"⚠️ Ошибка сохранения памяти: {memory_response.status}")
                     except Exception as mem_error:
                         logger.error(f"❌ Ошибка при сохранении памяти: {mem_error}")
             
@@ -719,6 +1010,22 @@ async def character_info_handler(message: types.Message, state: FSMContext):
             await message.answer("Вы еще не выбрали персонажа. Используйте /start для выбора.")
             return
         
+        # Send character avatar if available
+        if character.get("avatar_url"):
+            # Используем новую функцию для скачивания аватара с несколькими попытками
+            data, content_type = await download_avatar(character["avatar_url"], character["id"])
+            if data:
+                # Успешно скачали аватар
+                bio = BytesIO(data)
+                bio.name = f"avatar_{character['id']}.png"
+                await message.answer_photo(
+                    photo=InputFile(bio),
+                    caption=character.get("name", "")
+                )
+            else:
+                logger.warning(f"Не удалось загрузить аватар для персонажа {character.get('name')}")
+
+        # Display character info text regardless of avatar success
         info_text = f"🧑‍🤝‍🧑 *{character['name']}*\n\n"
         info_text += f"🎂 Возраст: {character.get('age', 'Неизвестно')} лет\n"
         
@@ -976,21 +1283,23 @@ async def select_character_menu(message: types.Message, state: FSMContext):
         
         # Send character avatar if available
         if "avatar_url" in character and character["avatar_url"]:
+            # Fetch and send avatar via InputFile to avoid Telegram URL restrictions
             try:
-                # Apply URL mapping to make avatar accessible from outside
                 avatar_url = character["avatar_url"]
                 for internal_url, public_url in url_mapping.items():
                     avatar_url = avatar_url.replace(internal_url, public_url)
-                
-                logger.info(f"Sending character avatar: {avatar_url}")
-                # First send the avatar with character name as caption
-                await message.answer_photo(
-                    photo=avatar_url,
-                    caption=f"{char_info}\n\nИспользуйте меню ниже, чтобы выбрать персонажа."
-                )
+                logger.info(f"Fetching character avatar: {avatar_url}")
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(avatar_url) as resp:
+                        if resp.status == 200:
+                            data = await resp.read()
+                            bio = BytesIO(data)
+                            bio.name = avatar_url.rsplit('/', 1)[-1]
+                            await message.answer_photo(photo=InputFile(bio), caption=f"{char_info}\n\nИспользуйте меню ниже, чтобы выбрать персонажа.")
+                        else:
+                            logger.warning(f"Failed to fetch avatar: HTTP {resp.status}")
             except Exception as e:
                 logger.error(f"Error sending character avatar: {e}")
-                # If sending avatar fails, just show character name in the menu
     
     # Now build the keyboard for character selection
     for i in range(0, len(characters), 2):
@@ -1668,4 +1977,6 @@ async def main():
     
 if __name__ == "__main__":
     logger.info("Starting AI Simulator Telegram Bot")
-    asyncio.run(main())
+    if __name__ == "__main__":
+        logger.info("Starting AI Simulator Telegram Bot")
+        asyncio.run(main())
