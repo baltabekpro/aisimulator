@@ -849,18 +849,18 @@ async def confirm_generated_character(message: types.Message, state: FSMContext)
                         return
                     
                     chat_response = await response.json()
-            
-            messages = chat_response.get("messages", [])
-            first_message = messages[0]["content"] if messages else "Привет! Давай пообщаемся."
-            
-            await message.answer(
-                f"Вы общаетесь с {selected_character['name']}.\n\n"
-                f"{first_message}\n\n"
-                "Отправьте сообщение для ответа or выберите действие.",
-                reply_markup=get_chat_keyboard()
-            )
-            await state.set_state(BotStates.chatting)
-            
+                    
+                    messages = chat_response.get("messages", [])
+                    first_message = messages[0]["content"] if messages else "Привет! Давай пообщаемся."
+                    
+                    await message.answer(
+                        f"Вы общаетесь с {selected_character['name']}.\n\n"
+                        f"{first_message}\n\n"
+                        "Отправьте сообщение для ответа or выберите действие.",
+                        reply_markup=get_chat_keyboard()
+                    )
+                    await state.set_state(BotStates.chatting)
+                    
         else:
             await message.answer("Вы отказались от общения с этим персонажем. Используйте /start для выбора существующего персонажа or /generate для создания нового.")
             await state.set_state(BotStates.selecting_character)
@@ -957,6 +957,42 @@ async def select_character_menu(message: types.Message, state: FSMContext):
     message_text = "👤 Выберите персонажа для общения:\n\n"
     keyboard = []
     
+    # Define URL mapping based on environment variable or default value
+    url_mapping = {"http://minio:9000": "http://localhost:9000"}
+    try:
+        # Try to parse MINIO_URL_MAPPING from env if available
+        minio_url_mapping = os.getenv("MINIO_URL_MAPPING")
+        if (minio_url_mapping):
+            import json
+            url_mapping = json.loads(minio_url_mapping)
+    except Exception as e:
+        logger.error(f"Error parsing MINIO_URL_MAPPING: {e}")
+    
+    # First, send character information with avatars
+    for character in characters:
+        char_name = character.get("name", "Персонаж")
+        char_age = character.get("age", "")
+        char_info = f"{char_name} ({char_age} лет)" if char_age else char_name
+        
+        # Send character avatar if available
+        if "avatar_url" in character and character["avatar_url"]:
+            try:
+                # Apply URL mapping to make avatar accessible from outside
+                avatar_url = character["avatar_url"]
+                for internal_url, public_url in url_mapping.items():
+                    avatar_url = avatar_url.replace(internal_url, public_url)
+                
+                logger.info(f"Sending character avatar: {avatar_url}")
+                # First send the avatar with character name as caption
+                await message.answer_photo(
+                    photo=avatar_url,
+                    caption=f"{char_info}\n\nИспользуйте меню ниже, чтобы выбрать персонажа."
+                )
+            except Exception as e:
+                logger.error(f"Error sending character avatar: {e}")
+                # If sending avatar fails, just show character name in the menu
+    
+    # Now build the keyboard for character selection
     for i in range(0, len(characters), 2):
         row = []
         for j in range(2):

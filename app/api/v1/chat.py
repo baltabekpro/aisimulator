@@ -459,7 +459,7 @@ async def send_message(
             Event.event_type == 'events'
         ).first()
         if events_record and events_record.data:
-            import json
+            # parse stored events JSON
             events_data = json.loads(events_record.data)
             context["events"] = events_data
         else:
@@ -1291,18 +1291,13 @@ async def get_character_memories(
             user_id_condition.append("user_id::text = :user_id")
             params["user_id"] = user_id
             
-            # Try direct comparison as UUID
-            try:
-                # Add this condition if the user_id is a valid UUID
-                import uuid as uuid_module  # Import as alias to avoid conflicts
-                uuid_obj = uuid_module.UUID(user_id)
-                user_id_condition.append("user_id = :user_id::uuid")
-            except ValueError:
-                # Not a valid UUID, skip this condition
-                pass
+            # Remove invalid direct UUID cast that causes SQL syntax errors
+            # Previous approach used: user_id_condition.append("user_id = :user_id::uuid")
             
-            # 2. Try without any user ID info (null user_id)
+            # Continue with fallback comparisons
+            # 2. Match null user_id
             user_id_condition.append("user_id IS NULL")
+            # 3. Numeric suffix matching...
             
             # 3. Extract numeric part from UUID if it contains a numeric suffix
             if "-" in user_id:
@@ -1382,11 +1377,67 @@ async def get_character_memories(
             result.append(memory_dict)
             
         logger.info(f"Found {len(result)} memories for character {character_id}")
+        if not result:
+            # Try loading saved memories from events table for this user
+            try:
+                from core.db.models import Event
+                # fetch JSON memory event
+                event = db.query(Event).filter(
+                    Event.character_id == character_id,
+                    Event.event_type == 'memory'
+                ).first()
+                if event and event.data:
+                    import json as _json
+                    mem_list = _json.loads(event.data)
+                    user_mem = []
+                    for m in mem_list:
+                        # include only this user's memories
+                        if user_id and str(m.get('user_id')) != user_id:
+                            continue
+                        if telegram_id and str(m.get('user_id')) != telegram_id:
+                            continue
+                        user_mem.append({
+                            'id': m.get('id'),
+                            'type': m.get('type', m.get('memory_type', 'unknown')),
+                            'memory_type': m.get('memory_type', m.get('type', 'unknown')),
+                            'category': m.get('category', 'general'),
+                            'content': m.get('content'),
+                            'importance': m.get('importance', 5),
+                            'is_active': m.get('is_active', True),
+                            'user_id': m.get('user_id'),
+                            'created_at': m.get('created_at')
+                        })
+                    if user_mem:
+                        return {'memories': user_mem, 'count': len(user_mem)}
+            except Exception:
+                logger.error('Error loading memories from events', exc_info=True)
+            # fallback to general memories when no personal entries found
+            final_query = '''
+                SELECT id, content, user_id, created_at
+                FROM memory_entries
+                WHERE character_id::text = :character_id
+                AND (is_active IS NULL OR is_active = TRUE)
+                LIMIT 50
+            '''
+            rows = db.execute(text(final_query), {"character_id": character_id}).fetchall()
+            general = []
+            for r in rows:
+                general.append({
+                    "id": r[0],
+                    "type": "general",
+                    "memory_type": "general",
+                    "category": "general",
+                    "content": r[1],
+                    "importance": 5,
+                    "is_active": True,
+                    "user_id": r[2],
+                    "created_at": str(r[3]) if r[3] else None
+                })
+            return {"memories": general, "count": len(general)}
         return {"memories": result, "count": len(result)}
     except Exception as e:
         logger.error(f"Error fetching memories: {e}")
         
-        # Fallback to a simpler query if the complex one fails
         try:
             logger.info("Trying fallback memory query without type/category columns")
             fallback_query = """
@@ -1403,15 +1454,12 @@ async def get_character_memories(
             params = {"character_id": character_id}
             user_id_condition = []
             
-            # Simplified user ID handling for fallback
             if user_id:
                 user_id_condition.append("user_id::text = :user_id")
                 params["user_id"] = user_id
                 
-                # Also try with no user ID
                 user_id_condition.append("user_id IS NULL")
                 
-                # Try pattern matching for the end of the UUID
                 if "-" in user_id:
                     last_part = user_id.split("-")[-1]
                     user_id_condition.append("user_id::text LIKE :pattern")
@@ -1421,11 +1469,9 @@ async def get_character_memories(
                 user_id_condition.append("user_id::text = :telegram_id")
                 params["telegram_id"] = telegram_id
                 
-                # Try pattern matching for telegram_id
                 user_id_condition.append("user_id::text LIKE :telegram_pattern")
                 params["telegram_pattern"] = f"%{telegram_id}"
                 
-                # Add a catch-all condition as a last resort
                 user_id_condition.append("1=1")
             
             if user_id_condition:
@@ -1440,8 +1486,8 @@ async def get_character_memories(
             for memory in memories:
                 result.append({
                     "id": memory[0],
-                    "type": "personal_info",  # Set a default type for display purposes
-                    "memory_type": "personal_info",  # Also provide memory_type
+                    "type": "personal_info",  
+                    "memory_type": "personal_info",  
                     "category": "general",
                     "content": memory[1],
                     "importance": 5,
@@ -1455,7 +1501,6 @@ async def get_character_memories(
         except Exception as e2:
             logger.error(f"Fallback query also failed: {e2}")
             
-            # Last resort: try without user ID filtering
             try:
                 logger.info("Trying query without user ID filtering")
                 final_fallback = """
@@ -1475,8 +1520,8 @@ async def get_character_memories(
                 for memory in memories:
                     result.append({
                         "id": memory[0],
-                        "type": "personal_info",  # Set a default type for display purposes
-                        "memory_type": "personal_info",  # Also provide memory_type 
+                        "type": "personal_info",  
+                        "memory_type": "personal_info", 
                         "category": "general",
                         "content": memory[1],
                         "importance": 5,
@@ -1518,10 +1563,12 @@ def create_character_memory(
     
     db.execute(text("""
         INSERT INTO memory_entries (
-            id, character_id, user_id, memory_type, category, content,
+            id, character_id, user_id,
+            type, memory_type, category, content,
             importance, is_active, created_at, updated_at
         ) VALUES (
-            :id, :character_id, :user_id, :memory_type, :category, :content,
+            :id, :character_id, :user_id,
+            :memory_type, :memory_type, :category, :content,
             :importance, TRUE, :created_at, :updated_at
         )
     """), {
@@ -1542,6 +1589,7 @@ def create_character_memory(
     return {
         "id": memory_id,
         "user_id": str(current_user.id),
+        "type": memory.memory_type,
         "memory_type": memory.memory_type,
         "category": memory.category,
         "content": memory.content,

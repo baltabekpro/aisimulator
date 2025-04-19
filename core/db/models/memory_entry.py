@@ -8,7 +8,7 @@ class MemoryEntry(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     character_id = Column(String, nullable=False)
-    user_id = Column(String, nullable=False)
+    user_id = Column(String, nullable=True)
     type = Column(String(50), default="unknown")
     memory_type = Column(String(50), default="unknown")
     category = Column(String(50), default="general")

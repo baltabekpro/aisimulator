@@ -141,9 +141,12 @@ class ApiClient:
         # Try all the user ID formats until we find memories
         for format_idx, uid_format in enumerate(user_id_formats):
             params = {}
+            # Initialize param_name to support logging when include_all
+            param_name = None
             
             # Add parameters based on format
             if include_all:
+                param_name = "include_all"
                 params["include_all"] = "true"
             elif uid_format is not None:
                 # Decide whether to use user_id or telegram_id parameter
@@ -181,5 +184,8 @@ class ApiClient:
         
         if not memories:
             logger.warning(f"No memories found for character {character_id} after trying {len(tried_urls)} different formats")
-            
+            # Fallback: fetch general memories without user filter
+            if not include_all:
+                logger.info("Falling back to fetch general memories (include_all=True)")
+                return self.get_character_memories(character_id, None, include_all=True)
         return memories
