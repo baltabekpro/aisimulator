@@ -550,8 +550,9 @@ def upload_user_avatar(user_id):
         minio_client.fput_object(bucket_name, object_name, temp_path, content_type=file.content_type)
         logger.info(f"Uploaded to MinIO as {object_name}")
         
-        # Get public URL
-        public_url = f"{os.environ.get('MINIO_PUBLIC_URL', 'http://minio:9000')}/{bucket_name}/{object_name}"
+        # Get public URL - Use localhost instead of internal Docker network name
+        minio_public_url = os.environ.get('MINIO_PUBLIC_URL', 'http://localhost:9000')
+        public_url = f"{minio_public_url}/{bucket_name}/{object_name}"
         logger.info(f"Avatar public URL: {public_url}")
         
         # Save to DB
@@ -929,14 +930,14 @@ def edit_character(character_id):
                 
                 # Handle avatar upload - now using MinIO
                 avatar_file = request.files.get('avatar')
-                if avatar_file and avatar_file.filename:
+                if (avatar_file and avatar_file.filename):
                     try:
                         from minio import Minio
                     except ImportError:
                         logger.error("MinIO client not installed. Install with: pip install minio")
                         flash("Storage error: MinIO client not installed", "danger")
                         return redirect(url_for('characters'))
-                        
+                    
                     # Validate content type
                     if avatar_file.content_type not in ['image/jpeg','image/png','image/jpg']:
                         flash('Invalid avatar file type. Use JPG or PNG.', 'danger')
@@ -975,8 +976,9 @@ def edit_character(character_id):
                             minio_client.fput_object(bucket_name, object_name, temp_path, content_type=avatar_file.content_type)
                             logger.info(f"Uploaded character avatar to MinIO as {object_name}")
                             
-                            # Get public URL
-                            avatar_url = f"{os.environ.get('MINIO_PUBLIC_URL', 'http://minio:9000')}/{bucket_name}/{object_name}"
+                            # Get public URL - Use localhost instead of internal Docker network name
+                            minio_public_url = os.environ.get('MINIO_PUBLIC_URL', 'http://localhost:9000')
+                            avatar_url = f"{minio_public_url}/{bucket_name}/{object_name}"
                             logger.info(f"Character avatar public URL: {avatar_url}")
                             
                             # Update avatar URL in database
